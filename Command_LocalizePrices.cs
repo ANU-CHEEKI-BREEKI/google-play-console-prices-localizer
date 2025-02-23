@@ -29,12 +29,6 @@ namespace gps_iap_managing
                 var listRequest = new InappproductsResource.ListRequest(Service, Package);
                 var listResponse = await listRequest.ExecuteAsync();
 
-                if (printList)
-                {
-                    Console.WriteLine("current IAP");
-                    listResponse.Inappproduct.PrintIapList(printPrices);
-                }
-
                 Console.WriteLine("resetting local prices...");
 
                 foreach (var product in listResponse.Inappproduct)
@@ -58,6 +52,12 @@ namespace gps_iap_managing
 
                 var result = await updateRequest.ExecuteAsync();
 
+                if (printList)
+                {
+                    Console.WriteLine("current restored IAP");
+                    result.Inappproducts.PrintIapList(printPrices);
+                }
+
                 Console.WriteLine("calculating local prices...");
 
                 // -0.01 to make prices looks smaller
@@ -74,16 +74,26 @@ namespace gps_iap_managing
                         var microPrice = decimal.Parse(price.Value.PriceMicros);
                         var regularPrice = microPrice / Mil;
                         var localizedPrice = regularPrice * pricePercentage;
-                        var roundedPrice = Math.Round(localizedPrice);
 
-                        var roundedMarketingPrice = roundedPrice;
+                        var roundedMarketingPrice = Math.Round(localizedPrice);
 
                         // for some countries prices are invalid.
-                        // so exclude this countries from out fancy marketing trick
+                        // so exclude this countries from our fancy marketing trick
                         if (!roundPricesFor.Contains(price.Key))
                         {
+                            var roundedPrice = Math.Round(localizedPrice);
+                            if (roundedPrice < 1)
+                                roundedPrice = Math.Round(localizedPrice, 2);
+
                             var marketingPrice = roundedPrice - 0.01m;
                             roundedMarketingPrice = Math.Round(marketingPrice, 2);
+
+                            if (roundedMarketingPrice < 0)
+                                roundedMarketingPrice = Math.Round(localizedPrice, 2);
+                        }
+                        else if (roundedMarketingPrice < 0.5m)
+                        {
+                            roundedMarketingPrice = 1;
                         }
 
                         var localizedMicroPrice = roundedMarketingPrice * Mil;
