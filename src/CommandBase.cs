@@ -5,14 +5,16 @@ namespace gps_iap_managing
     public abstract class CommandBase
     {
         public AndroidPublisherService? Service { get; set; }
-        public string? Package { get; private set; }
+        public Config Config { get; private set; } = null!;
         public string[] Args { get; set; } = null!;
 
-        public void Initialize(AndroidPublisherService service, string package, string[] args)
+        public string Package => Config.PackageName;
+
+        public void Initialize(AndroidPublisherService service, Config config, string[] args)
         {
-            this.Args = args;
-            this.Service = service;
-            this.Package = package;
+            Args = args;
+            Service = service;
+            Config = config;
         }
 
         public abstract bool IsMatches(string[] args);
