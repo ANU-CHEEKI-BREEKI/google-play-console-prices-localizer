@@ -1,25 +1,28 @@
 ﻿using Google.Apis.AndroidPublisher.v3;
-using Google.Apis.AndroidPublisher.v3.Data;
 using Google.Apis.Auth.OAuth2;
 using gps_iap_managing;
 using static Google.Apis.Services.BaseClientService;
 
 var commands = new CommandsCollection()
 {
+    new Command_List(),
     new Command_Restore(),
     new Command_LocalizePrices(),
-    new Command_List(),
+    new Command_RestoreReversed(),
+    new Command_LocalizePricesReversed(),
 };
 
 if (commands.TryPrintHelp(args))
     return;
 
-var credentialPath = args[0];
-var package = args[1];
+var config = await CommandLinesUtils.LoadJson<Config>(args, false, "--config", "../config.json");
+if (config is null)
+    throw new ArgumentNullException("config");
 
-using var canceller = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+using var canceller = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
 var credentials = await GoogleWebAuthorizationBroker.AuthorizeAsync(
-    (await GoogleClientSecrets.FromFileAsync(credentialPath)).Secrets,
+    (await GoogleClientSecrets.FromFileAsync(config.CredentialsFilePath)).Secrets,
     [AndroidPublisherService.Scope.Androidpublisher],
     "user",
     canceller.Token
@@ -38,7 +41,7 @@ if (command is null)
     return;
 }
 
-command.Initialize(service, package, args);
+command.Initialize(service, config, args);
 await command.ExecuteAsync();
 
 Console.WriteLine("done.");

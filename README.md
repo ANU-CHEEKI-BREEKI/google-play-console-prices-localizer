@@ -12,11 +12,29 @@ In this repository, there is a program that will help you ***automatically*** up
 
 One command:
 
-    gps-iap-managing.exe {oauth_client_credentials.json} {com.YourGame.PackageName} --localize
+    gps-iap-managing.exe --localize
 
 And all prices will be localized!
 
 **Or you can run the program without parameters. It will display a more detailed help in the console.**
+
+
+**You also need to set up `../config.json` file**
+
+    {
+        "PackageName": "com.MyApp.Package",
+        "CredentialsFilePath": "../oauth_client_credentials.json",
+        "DefaultPricesFilePath": "../default-prices-in-local-currency.json",
+        "SetDefaultPricesPercentage": 0.32
+    }
+
+
+there are example of default-prices-in-local-currency.json
+
+    {
+        "crystals_1": { "defaultPrice": 41.22 },
+        "crystals_6": { "defaultPrice": 4163.14 },
+    }
 
 ---
 
@@ -67,6 +85,14 @@ Then download the **`Client secrets`** of the created OAuth desktop client. This
 `--restore [-v] [-l]`
     To reset all local prices to the default prices. `-v` To see IAPs lists during restoring, `-l` to also see local prices
 
+`--restore-rev [-v] [-l]`
+    To reset all local prices to the default prices provided in default-prices-in-local-currency.json
+
+`--localize-rev [-v] [-l]`
+    To reset all local prices to the default prices provided in default-prices-in-local-currency.json multiplied by SetDefaultPricesPercentage
+    And set all local prices to  prices provided in default-prices-in-local-currency.json multiplied by % from localized-prices-template.json. 
+    This is useful if you want to set regional prices for country that not support local prices yet (Argentina for example). So this countries will show prices based on default price 
+
 ---
 
 ### Examples
@@ -74,19 +100,38 @@ Then download the **`Client secrets`** of the created OAuth desktop client. This
 1. You cloned the repository and built the program.
 1. You open the command line in the project folder.
 1. You downloaded and placed the `client_credentials.json` file with the `client secrets` in the folder next to the project folder.
+1. you created and placed the `config.json` file in the folder next to the project folder.
+1. you created and placed the `default-prices-in-local-currency.json` file in the folder next to the project folder.
 1. The app for which you want to localize prices has the package name `com.MyApp.Package`.
+
+your config.json
+
+    {
+        "PackageName": "com.MyApp.Package",
+        "CredentialsFilePath": "../client_credentials.json",
+        "DefaultPricesFilePath": "../default-prices-in-local-currency.json",
+        "SetDefaultPricesPercentage": 0.32
+    }
+
+your default-prices-in-local-currency.json
+
+    {
+        "crystals_1": { "defaultPrice": 41.22 },
+        "crystals_6": { "defaultPrice": 4163.14 },
+    }
+
 
 Then, your commands will likely look like this:
 
 To see the list of all IAPs:
 
-    .\bin\Release\net8.0\gps-iap-managing.exe ..\client_credentials.json com.MyApp.Package --list -l
+    .\bin\Release\net8.0\gps-iap-managing.exe --list -l
 
 To reset local prices to the default prices:
 
-    .\bin\Release\net8.0\gps-iap-managing.exe ..\client_credentials.json com.MyApp.Package --restore
+    .\bin\Release\net8.0\gps-iap-managing.exe --restore
 
 To localize the prices:
 
-    .\bin\Release\net8.0\gps-iap-managing.exe ..\client_credentials.json com.MyApp.Package --localize
+    .\bin\Release\net8.0\gps-iap-managing.exe --localize
 
