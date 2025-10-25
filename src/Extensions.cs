@@ -14,7 +14,7 @@ namespace gps_iap_managing
                     continue;
 
                 var sb = new StringBuilder();
-                
+
                 foreach (var price in item.Prices)
                 {
                     sb.Append($"{price.Key}: {price.Value.FormattedPrice()}");

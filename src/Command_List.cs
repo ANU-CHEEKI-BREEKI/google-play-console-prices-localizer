@@ -1,4 +1,6 @@
 using Google.Apis.AndroidPublisher.v3;
+using Google.Apis.AndroidPublisher.v3.Data;
+using static Google.Apis.AndroidPublisher.v3.MonetizationResource;
 
 namespace gps_iap_managing
 {
@@ -32,7 +34,7 @@ namespace gps_iap_managing
         {
             Console.WriteLine("list");
             Console.WriteLine("    usage: --list  [-l]");
-            Console.WriteLine("    list all IAP in project (not subscriptions)");
+            Console.WriteLine("    list all IAP in project (NOT subscriptions)");
             Console.WriteLine("    -l  print local prices");
         }
     }
