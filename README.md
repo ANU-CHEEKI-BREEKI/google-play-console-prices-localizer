@@ -1,3 +1,7 @@
+<sup>***Looking for [IOS Apple App Store](https://github.com/ANU-CHEEKI-BREEKI/app-store-connect-prices-localizer) analog?***</sup>
+
+---
+
 Have you ever created ***IAPs*** (In-App Purchases) for your app on Google Play?
 
 Have you thought about ***setting regional prices*** to make purchases more accessible in countries with lower purchasing power?
