@@ -30,7 +30,7 @@ namespace gps_iap_managing
         {
             Console.WriteLine("list");
             Console.WriteLine("    usage: --list  [-l]");
-            Console.WriteLine("    list all IAP in project (NOT subscriptions)");
+            Console.WriteLine("    list all Onetimeproducts in project (NOT subscriptions)");
             Console.WriteLine("    -l  print local prices");
         }
     }

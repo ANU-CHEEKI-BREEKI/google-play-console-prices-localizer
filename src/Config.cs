@@ -3,7 +3,7 @@ public class Config
     public string PackageName { get; set; } = "";
     public string CredentialsFilePath { get; set; } = "";
     public string DefaultPricesFilePath { get; set; } = "";
-    public decimal SetDefaultPricesPercentage { get; set; } = 1m;
+    public string DefaultCurrency { get; set; } = "USD";
 }
 
 public class ProductConfig
