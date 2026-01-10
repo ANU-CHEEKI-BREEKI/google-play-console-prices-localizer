@@ -1,4 +1,5 @@
 using System.Text;
+using Google.Apis.AndroidPublisher.v3;
 using Google.Apis.AndroidPublisher.v3.Data;
 
 namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
@@ -81,8 +82,16 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             return (decimal)total;
         }
 
-        public static async Task SendWithRetryAsync(this IList<UpdateOneTimeProductRequest> updateRequests, Google.Apis.AndroidPublisher.v3.AndroidPublisherService service, string package, int maxRetries = 5)
+        public static async Task SendBatchedWithRetryAsync(this IList<OneTimeProduct> products, AndroidPublisherService service, string package, int maxRetries = 5)
         {
+            // Update all products using BatchUpdate
+            var updateRequests = products.Select(product => new UpdateOneTimeProductRequest
+            {
+                OneTimeProduct = product,
+                UpdateMask = "purchaseOptions",
+                RegionsVersion = product.RegionsVersion
+            }).ToList();
+
             // we have TIMEOUT EXCEPTIONS
             // so lets update one IAP per request
 
@@ -119,6 +128,51 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                         if (currentRetry >= maxRetries)
                         {
                             Console.WriteLine($"  >>> SKIPPING {updateRequest.OneTimeProduct.ProductId} after {maxRetries} failed attempts.");
+                        }
+                        else
+                        {
+                            Console.WriteLine("  Waiting 5 seconds before retrying...");
+                            await Task.Delay(TimeSpan.FromSeconds(5));
+                        }
+                    }
+                }
+            }
+        }
+
+        public static async Task SendWithRetryAsync(this IList<OneTimeProduct> products, AndroidPublisherService service, string package, int maxRetries = 5)
+        {
+            // batch requests works slow
+            // and we any way updating each product one by one
+            // MAYBE will be faster to use Patch call instead
+
+            var count = products.Count;
+            var q = 0;
+            foreach (var product in products)
+            {
+                q++;
+                Console.WriteLine($"Sending Patch {q}/{count} for {product.ProductId}...");
+
+                var currentRetry = 0;
+                var success = false;
+
+                while (currentRetry < maxRetries && !success)
+                {
+                    try
+                    {
+                        var patchRequest = service!.Monetization.Onetimeproducts.Patch(product, package, product.ProductId);
+                        patchRequest.RegionsVersionVersion = product.RegionsVersion.Version;
+                        patchRequest.UpdateMask = "purchaseOptions";
+                        await patchRequest.ExecuteAsync();
+                        success = true; // It worked! Exit the retry loop
+                    }
+                    catch (Exception ex)
+                    {
+                        currentRetry++;
+                        Console.WriteLine($"  [Attempt {currentRetry}/{maxRetries}] Failed: {ex.Message}");
+
+                        if (currentRetry >= maxRetries)
+                        {
+                            Console.WriteLine($"  >>> SKIPPING {product.ProductId} after {maxRetries} failed attempts.");
                         }
                         else
                         {

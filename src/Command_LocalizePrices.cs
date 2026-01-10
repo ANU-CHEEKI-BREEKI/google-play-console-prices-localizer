@@ -123,8 +123,6 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                             {
                                 Availability = oldConfig.Availability,
                                 RegionCode = oldConfig.RegionCode,
-                                ETag = oldConfig.ETag,
-
                                 Price = newPrice,
                             };
                             newConfigs.Add(newConfig);
@@ -147,15 +145,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                 Console.WriteLine("Sending IAP to Google Play Console...");
 
-                // Update all products using BatchUpdate
-                var updateRequests = listResponse.OneTimeProducts.Select(product => new UpdateOneTimeProductRequest
-                {
-                    OneTimeProduct = product,
-                    UpdateMask = "purchaseOptions",
-                    RegionsVersion = product.RegionsVersion
-                }).ToList();
-
-                await updateRequests.SendWithRetryAsync(Service, Package);
+                await listResponse.OneTimeProducts.SendWithRetryAsync(Service, Package);
 
                 if (verbose)
                 {
