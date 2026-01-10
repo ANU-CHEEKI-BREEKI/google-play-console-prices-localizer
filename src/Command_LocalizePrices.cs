@@ -5,131 +5,174 @@ namespace gps_iap_managing
 {
     public class Command_LocalizePrices : CommandBase
     {
-        private int Mil = 1_000_000;
-
         public override async Task ExecuteAsync()
         {
+
             try
             {
-                var printList = Args.Contains("-v");
-                var printPrices = Args.Contains("-l");
+                var verbose = Args.Contains("-v");
+                var printLocalPrices = Args.Contains("-l");
 
-                Console.WriteLine("loading prices template...");
+                Console.WriteLine("loading default prices...");
 
-                var pricesTemplate = await CommandLinesUtils.LoadJson<Dictionary<string, decimal>>(Args, printList, "--path=", "./configs/localized-prices-template.json");
-                var roundPricesArray = await CommandLinesUtils.LoadJson<string[]>(Args, printList, "--roundPricesPath=", "./configs/round-prices-for.json");
+                var resolvedPath = new CommandLinesUtils.ResolvedPathGetter();
+                var defaultPrices = await CommandLinesUtils.LoadJson<ProductConfigs>(Args, verbose, "--prices-path", Config.DefaultPricesFilePath, resolvedPath);
+                if (defaultPrices == null)
+                {
+                    Console.WriteLine($"Failed to load default prices from {resolvedPath.ResolvedPath}");
+                    return;
+                }
+
+                var pricesTemplate = await CommandLinesUtils.LoadJson<LocalizedPricesPercentagesConfigs>(Args, verbose, "--path", "./configs/localized-prices-template.json", resolvedPath);
+                if (pricesTemplate is null)
+                {
+                    Console.WriteLine($"Failed to load localized prices template from {resolvedPath.ResolvedPath}");
+                    return;
+                }
+                var roundPricesArray = await CommandLinesUtils.LoadJson<string[]>(Args, verbose, "--roundPricesPath", "./configs/round-prices-for.json");
                 var roundPricesFor = new HashSet<string>(roundPricesArray ?? Array.Empty<string>());
 
                 Console.WriteLine("receiving IAP list...");
 
-                var listRequest = new InappproductsResource.ListRequest(Service, Package);
+                var listRequest = Service.Monetization.Onetimeproducts.List(Package);
                 var listResponse = await listRequest.ExecuteAsync();
 
-                Console.WriteLine("resetting local prices...");
-
-                foreach (var product in listResponse.Inappproduct)
-                    product.Prices = new Dictionary<string, Price>();
-
-                var updateProductsRequests = listResponse.Inappproduct.Select(product => new InappproductsUpdateRequest()
+                if (verbose)
                 {
-                    PackageName = Package,
-                    Sku = product.Sku,
-                    AllowMissing = false,
-                    AutoConvertMissingPrices = true,
-                    Inappproduct = product
-                }).ToArray();
-                var updateRequest = new InappproductsResource.BatchUpdateRequest(
-                    Service,
-                    new InappproductsBatchUpdateRequest() { Requests = updateProductsRequests },
-                    Package
-                );
-
-                Console.WriteLine("sending IAP to Google Play Console...");
-
-                var result = await updateRequest.ExecuteAsync();
-
-                if (printList)
-                {
-                    Console.WriteLine("current restored IAP");
-                    result.Inappproducts.PrintIapList(printPrices);
+                    Console.WriteLine("current IAP");
+                    listResponse.OneTimeProducts.PrintIapList(printLocalPrices);
                 }
 
-                Console.WriteLine("calculating local prices...");
+                Console.WriteLine("calculating localized prices...");
 
-                // -0.01 to make prices looks smaller
-                // like 4,99 USD instead of 5 USD looks like 4 USD to the customer
-                // just generic marketing trick
-
-                foreach (var product in result.Inappproducts)
+                foreach (var product in listResponse.OneTimeProducts)
                 {
-                    foreach (var price in product.Prices)
+                    var legacyOption = product.PurchaseOptions
+                        ?.FirstOrDefault(po => po.BuyOption?.LegacyCompatible == true);
+
+                    if (legacyOption is null)
+                        continue;
+
+                    if (!defaultPrices.TryGetValue(product.ProductId, out var defaultPrice))
                     {
-                        if (!pricesTemplate!.TryGetValue(price.Key, out var pricePercentage))
-                            continue;
+                        Console.WriteLine($"Warning: No default price for {product.ProductId}");
+                        continue;
+                    }
 
-                        var microPrice = decimal.Parse(price.Value.PriceMicros);
-                        var regularPrice = microPrice / Mil;
-                        var localizedPrice = regularPrice * pricePercentage;
+                    // make from 10$ 9.99%
+                    // YES google can make it on their side, but NOT not countries there local currency not supported
+                    // so lets make sure here that  price in EVERY country not rounded
+                    if (Math.Truncate(defaultPrice) == defaultPrice)
+                        defaultPrice -= 0.01m;
 
-                        var roundedMarketingPrice = Math.Round(localizedPrice);
+                    var units = (long)Math.Floor(defaultPrice);
+                    var nanos = (int)((defaultPrice - units) * 1_000_000_000);
 
-                        // for some countries prices are invalid.
-                        // so exclude this countries from our fancy marketing trick
-                        if (!roundPricesFor.Contains(price.Key))
+                    var baseMoney = new Money
+                    {
+                        CurrencyCode = Config.DefaultCurrency,
+                        Units = units,
+                        Nanos = nanos
+                    };
+
+                    try
+                    {
+                        if (verbose)
+                            Console.WriteLine($"Calculating exchange rates for {product.ProductId}...");
+
+                        var convertRequest = new ConvertRegionPricesRequest
                         {
-                            var roundedPrice = Math.Round(localizedPrice);
-                            if (roundedPrice < 1)
-                                roundedPrice = Math.Round(localizedPrice, 2);
+                            Price = baseMoney,
+                        };
 
-                            var marketingPrice = roundedPrice - 0.01m;
-                            roundedMarketingPrice = Math.Round(marketingPrice, 2);
+                        var convertResponse = await Service.Monetization
+                            .ConvertRegionPrices(convertRequest, Package)
+                            .ExecuteAsync();
 
-                            if (roundedMarketingPrice < 0)
-                                roundedMarketingPrice = Math.Round(localizedPrice, 2);
-                        }
-                        else if (roundedMarketingPrice < 0.5m)
+                        var newConfigs = new List<OneTimeProductPurchaseOptionRegionalPricingAndAvailabilityConfig>();
+                        foreach (var oldConfig in legacyOption.RegionalPricingAndAvailabilityConfigs)
                         {
-                            roundedMarketingPrice = 1;
+                            var newPrice = convertResponse.ConvertedRegionPrices.TryGetValue(oldConfig.RegionCode, out var price)
+                                ? price.Price
+                                : oldConfig.Price.CurrencyCode == convertResponse.ConvertedOtherRegionsPrice.UsdPrice.CurrencyCode
+                                    ? convertResponse.ConvertedOtherRegionsPrice.UsdPrice
+                                    : convertResponse.ConvertedOtherRegionsPrice.EurPrice;
+
+                            if (!pricesTemplate.TryGetValue(oldConfig.RegionCode, out var pricePercentage))
+                            {
+                                if (verbose)
+                                    Console.WriteLine($"Warning: No price percentage for region {oldConfig.RegionCode}. Keeping original price.");
+                            }
+                            else
+                            {
+                                var decimalPrice = newPrice.ToDecimalPrice();
+                                decimalPrice *= pricePercentage;
+
+                                decimalPrice = Math.Ceiling(decimalPrice);
+
+                                if (!roundPricesFor.Contains(oldConfig.RegionCode))
+                                    decimalPrice -= 0.01m;
+
+                                var localUnits = (long)Math.Floor(decimalPrice);
+                                var localNanos = (int)((decimalPrice - localUnits) * 1_000_000_000);
+
+                                newPrice.Units = localUnits;
+                                newPrice.Nanos = localNanos;
+                            }
+
+                            var newConfig = new OneTimeProductPurchaseOptionRegionalPricingAndAvailabilityConfig
+                            {
+                                Availability = oldConfig.Availability,
+                                RegionCode = oldConfig.RegionCode,
+                                ETag = oldConfig.ETag,
+
+                                Price = newPrice,
+                            };
+                            newConfigs.Add(newConfig);
                         }
 
-                        var localizedMicroPrice = roundedMarketingPrice * Mil;
-                        var noPeriodPrice = Math.Round(localizedMicroPrice);
-
-                        price.Value.PriceMicros = $"{noPeriodPrice}";
+                        // Apply the full list of regions
+                        legacyOption.RegionalPricingAndAvailabilityConfigs = newConfigs;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to convert prices for {product.ProductId}: {ex.Message}");
                     }
                 }
 
-
-                if (printList)
+                if (verbose)
                 {
-                    Console.WriteLine("calculated IAP prices:");
-                    result.Inappproducts.PrintIapList(printPrices);
+                    Console.WriteLine("Local updated prices:");
+                    listResponse.OneTimeProducts.PrintIapList(printLocalPrices);
                 }
 
-                updateProductsRequests = result.Inappproducts.Select(product => new InappproductsUpdateRequest()
+                Console.WriteLine("Sending IAP to Google Play Console...");
+
+                // Update all products using BatchUpdate
+                var updateRequests = listResponse.OneTimeProducts.Select(product => new UpdateOneTimeProductRequest
                 {
-                    PackageName = Package,
-                    Sku = product.Sku,
-                    AllowMissing = false,
-                    AutoConvertMissingPrices = true,
-                    Inappproduct = product
-                }).ToArray();
-                updateRequest = new InappproductsResource.BatchUpdateRequest(
-                    Service,
-                    new InappproductsBatchUpdateRequest() { Requests = updateProductsRequests },
-                    Package
-                );
+                    OneTimeProduct = product,
+                    UpdateMask = "purchaseOptions",
+                    RegionsVersion = product.RegionsVersion // ?? new RegionsVersion { Version = "2022/02" }
+                }).ToList();
 
-                Console.WriteLine("sending IAP to Google Play Console...");
-
-                result = await updateRequest.ExecuteAsync();
-
-                if (printList)
+                var batchUpdateRequest = new BatchUpdateOneTimeProductsRequest
                 {
-                    Console.WriteLine("updated IAP:");
-                    result.Inappproducts.PrintIapList(printPrices);
+                    Requests = updateRequests
+                };
+
+                var batchRequest = Service!.Monetization.Onetimeproducts.BatchUpdate(batchUpdateRequest, Package);
+                await batchRequest.ExecuteAsync();
+
+                if (verbose)
+                {
+                    Console.WriteLine("updated IAP");
+
+                    // Fetch the updated list
+                    var updatedListRequest = Service!.Monetization.Onetimeproducts.List(Package);
+                    var updatedListResponse = await updatedListRequest.ExecuteAsync();
+                    updatedListResponse.OneTimeProducts.PrintIapList(printLocalPrices);
                 }
-
             }
             catch (Exception ex)
             {
@@ -141,7 +184,7 @@ namespace gps_iap_managing
         public override void PrintHelp()
         {
             Console.WriteLine("localize");
-            Console.WriteLine("    usage: --localize  [--path={localized-prices-template.json}] [--roundPricesPath={round-prices-for.json}] [-v]  [-l]");
+            Console.WriteLine("    usage: --localize  [--path <localized-prices-template.json>] [--roundPricesPath <round-prices-for.json>] [-v]  [-l]");
             Console.WriteLine("    restore prices and then update all local prices to match percentages in config");
             Console.WriteLine("    --path path to json file that contains dictionary AA to x%");
             Console.WriteLine("    where AA country code, and x% price percentage from default price");

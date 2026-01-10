@@ -69,6 +69,17 @@ namespace gps_iap_managing
 
             return $"{total:0.00} {money.CurrencyCode}";
         }
+        
+        public static decimal ToDecimalPrice(this Money money)
+        {
+            if (money == null) 
+            return 0;
+
+            double fractionalPart = (money.Nanos ?? 0) / 1_000_000_000.0;
+            double total = (money.Units ?? 0) + fractionalPart;
+
+            return (decimal)total;
+        }
     }
 }
 

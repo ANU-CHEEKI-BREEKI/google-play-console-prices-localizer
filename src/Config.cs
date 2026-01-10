@@ -7,3 +7,4 @@ public class Config
 }
 
 public class ProductConfigs : Dictionary<string, decimal> { }
+public class LocalizedPricesPercentagesConfigs : Dictionary<string, decimal> { }
