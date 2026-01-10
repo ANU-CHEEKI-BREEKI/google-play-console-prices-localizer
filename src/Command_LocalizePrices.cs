@@ -11,9 +11,6 @@ namespace gps_iap_managing
         {
             try
             {
-                if (!IsMatches(Args))
-                    return;
-
                 var printList = Args.Contains("-v");
                 var printPrices = Args.Contains("-l");
 

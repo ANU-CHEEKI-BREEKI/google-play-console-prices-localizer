@@ -6,9 +6,6 @@ namespace gps_iap_managing
         {
             try
             {
-                if (!IsMatches(Args))
-                    return;
-
                 var printPrices = Args.Contains("-l");
 
                 Console.WriteLine("receiving IAP list...");

@@ -29,7 +29,7 @@ namespace gps_iap_managing
         public static string FormattedPrice(this Price price)
             => $"{decimal.Parse(price.PriceMicros) / 1_000_000} {price.Currency}";
 
-        public static void PrintIapList(this IList<OneTimeProduct> products, bool printPrices)
+        public static void PrintIapList(this IList<OneTimeProduct> products, bool printLocalPrices)
         {
             var stringPairs = new List<StringPairs>();
 
@@ -40,7 +40,7 @@ namespace gps_iap_managing
 
                 stringPairs.Add(new StringPairs { A = product.ProductId, B = usPrice.Price.FormattedPrice() });
 
-                if (!printPrices)
+                if (!printLocalPrices)
                     continue;
 
                 foreach (var config in option.RegionalPricingAndAvailabilityConfigs)
