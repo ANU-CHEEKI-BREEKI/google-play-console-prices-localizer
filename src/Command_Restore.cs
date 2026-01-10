@@ -37,38 +37,74 @@ namespace gps_iap_managing
 
                 foreach (var product in listResponse.OneTimeProducts)
                 {
-                    var legacyOption = product.PurchaseOptions?.FirstOrDefault(po => po.BuyOption?.LegacyCompatible == true);
+                    var legacyOption = product.PurchaseOptions
+                        ?.FirstOrDefault(po => po.BuyOption?.LegacyCompatible == true);
 
-                    if (legacyOption == null)
-                    {
-                        Console.WriteLine($"Warning: No legacy compatible BuyOption found for product {product.ProductId}");
+                    if (legacyOption is null)
                         continue;
-                    }
-
-                    product.PurchaseOptions = [legacyOption];
 
                     if (!defaultPrices.TryGetValue(product.ProductId, out var defaultPrice))
                     {
-                        Console.WriteLine($"Warning: No default price configured for product {product.ProductId}");
+                        Console.WriteLine($"Warning: No default price for {product.ProductId}");
                         continue;
                     }
 
-                    if (legacyOption.RegionalPricingAndAvailabilityConfigs != null)
+                    // make from 10$ 9.99%
+                    // YES google can make it on their side, but NOT not countries there local currency not supported
+                    // so lets make sure here that  price in EVERY country not rounded
+                    if (Math.Truncate(defaultPrice) == defaultPrice)
+                        defaultPrice -= 0.01m;
+
+                    var units = (long)Math.Floor(defaultPrice);
+                    var nanos = (int)((defaultPrice - units) * 1_000_000_000);
+
+                    var baseMoney = new Money
                     {
-                        var config = legacyOption.RegionalPricingAndAvailabilityConfigs.FirstOrDefault(c => c.RegionCode == Config.DefaultCurrencyRegion);
-                        if (config is null)
+                        CurrencyCode = Config.DefaultCurrency,
+                        Units = units,
+                        Nanos = nanos
+                    };
+
+                    try
+                    {
+                        if (verbose)
+                            Console.WriteLine($"Calculating exchange rates for {product.ProductId}...");
+
+                        var convertRequest = new ConvertRegionPricesRequest
                         {
-                            Console.WriteLine($"Warning: No purchase option with region {Config.DefaultCurrencyRegion} found for product {product.ProductId}");
-                            continue;
+                            Price = baseMoney,
+                        };
+
+                        var convertResponse = await Service.Monetization
+                            .ConvertRegionPrices(convertRequest, Package)
+                            .ExecuteAsync();
+
+                        var newConfigs = new List<OneTimeProductPurchaseOptionRegionalPricingAndAvailabilityConfig>();
+                        foreach (var oldConfig in legacyOption.RegionalPricingAndAvailabilityConfigs)
+                        {
+                            var newPrice = convertResponse.ConvertedRegionPrices.TryGetValue(oldConfig.RegionCode, out var price)
+                                ? price.Price
+                                : oldConfig.Price.CurrencyCode == convertResponse.ConvertedOtherRegionsPrice.UsdPrice.CurrencyCode
+                                    ? convertResponse.ConvertedOtherRegionsPrice.UsdPrice
+                                    : convertResponse.ConvertedOtherRegionsPrice.EurPrice;
+
+                            var newConfig = new OneTimeProductPurchaseOptionRegionalPricingAndAvailabilityConfig
+                            {
+                                Availability = oldConfig.Availability,
+                                RegionCode = oldConfig.RegionCode,
+                                ETag = oldConfig.ETag,
+
+                                Price = newPrice,
+                            };
+                            newConfigs.Add(newConfig);
                         }
 
-                        var units = (long)Math.Floor(defaultPrice);
-                        var nanos = (int)((defaultPrice - units) * 1_000_000_000);
-
-                        config.Price.Units = units;
-                        config.Price.Nanos = nanos;
-                        
-                        legacyOption.RegionalPricingAndAvailabilityConfigs = [config];
+                        // Apply the full list of regions
+                        legacyOption.RegionalPricingAndAvailabilityConfigs = newConfigs;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to convert prices for {product.ProductId}: {ex.Message}");
                     }
                 }
 
@@ -85,7 +121,7 @@ namespace gps_iap_managing
                 {
                     OneTimeProduct = product,
                     UpdateMask = "purchaseOptions",
-                    RegionsVersion = new RegionsVersion { Version = Config.DefaultCurrencyRegion }
+                    RegionsVersion = product.RegionsVersion // ?? new RegionsVersion { Version = "2022/02" }
                 }).ToList();
 
                 var batchUpdateRequest = new BatchUpdateOneTimeProductsRequest
