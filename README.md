@@ -12,11 +12,21 @@ In this repository, there is a program that will help you ***automatically*** up
 
 ---
 
+### ATTENTION
+
+``THE PROJECT WAS UPDATED TO USE NEW GOOGLE APIS FOR Onetimeproducts``
+<br><br>
+``but, since i (as Unity game-dev) dont use IAP purchase options, and use only the Default purchase option, this project designed to work only with single "LegacyCompatible"/"Backward compatible" purchase option``
+
+<img src="image.png" alt="drawing" width="400"/>
+
+---
+
 ### How to use
 
 One command:
 
-    gps-iap-managing.exe --localize
+    dotnet run --localize
 
 And all prices will be localized!
 
@@ -27,17 +37,21 @@ And all prices will be localized!
 
     {
         "PackageName": "com.MyApp.Package",
-        "CredentialsFilePath": "../oauth_client_credentials.json",
-        "DefaultPricesFilePath": "../default-prices-in-local-currency.json",
-        "SetDefaultPricesPercentage": 0.32
+        "CredentialsFilePath": "./oauth_client_credentials.json",
+        "DefaultPricesFilePath": "./default-prices.json",
+        "DefaultCurrency": "USD"
     }
 
+`CredentialsFilePath` and `DefaultPricesFilePath` are relative to `config.json`
 
-there are example of default-prices-in-local-currency.json
+**About Credentials [HERE](#The-pain-in-the-ass)**
+
+There are example of default-prices.json<br>
+Prices are in `DefaultCurrency` specified in `config.json` - in this example its (USD) 
 
     {
-        "crystals_1": { "defaultPrice": 41.22 },
-        "crystals_6": { "defaultPrice": 4163.14 },
+        "crystals_1": 10,
+        "crystals_6": 50,
     }
 
 ---
@@ -63,7 +77,14 @@ In the file `localized-prices-template.json`, there are multipliers for each cou
 - Then, 0.01 is subtracted from the price to make round prices like `10$` become `9.99$`.
 - Finally, the program uses the [Google Play Developer APIs](https://developers.google.com/android-publisher) to update the IAPs in your project on the Google Play Console.
 
-The `default prices` remain unchanged! So you can repeat this process as many times as you need.
+---
+
+**Waring**
+
+Because of rounding - small prices can stay unchanged (0.99 usd became 0.99 usd).
+To fix this is required to ask google apis to convert localized price (0.99 * 72% for example) to target currency. This will make sure price a valid. But thats required more work and will take mre time for program to execute. I dont care about this to much, so i did not implement this yet.
+
+---
 
 Google Console does not allow decimal prices for some countries, so the `round-prices-for.json` file contains exceptions. For these countries, the prices will be rounded (no more `9.99`, only `10`).
 
@@ -89,14 +110,6 @@ Then download the **`Client secrets`** of the created OAuth desktop client. This
 `--restore [-v] [-l]`
     To reset all local prices to the default prices. `-v` To see IAPs lists during restoring, `-l` to also see local prices
 
-`--restore-rev [-v] [-l]`
-    To reset all local prices to the default prices provided in default-prices-in-local-currency.json
-
-`--localize-rev [-v] [-l]`
-    To reset all local prices to the default prices provided in default-prices-in-local-currency.json multiplied by SetDefaultPricesPercentage
-    And set all local prices to  prices provided in default-prices-in-local-currency.json multiplied by % from localized-prices-template.json. 
-    This is useful if you want to set regional prices for country that not support local prices yet (Argentina for example). So this countries will show prices based on default price 
-
 ---
 
 ### Examples
@@ -112,30 +125,33 @@ your config.json
 
     {
         "PackageName": "com.MyApp.Package",
-        "CredentialsFilePath": "../client_credentials.json",
-        "DefaultPricesFilePath": "../default-prices-in-local-currency.json",
-        "SetDefaultPricesPercentage": 0.32
+        "CredentialsFilePath": "./oauth_client_credentials.json",
+        "DefaultPricesFilePath": "./default-prices.json",
+        "DefaultCurrency": "USD"
     }
 
-your default-prices-in-local-currency.json
+your default-prices.json
 
     {
-        "crystals_1": { "defaultPrice": 41.22 },
-        "crystals_6": { "defaultPrice": 4163.14 },
+        "crystals_1": 10,
+        "crystals_6": 50,
     }
 
-
+You opened Project in visual studio code and opened terminal.
 Then, your commands will likely look like this:
 
 To see the list of all IAPs:
 
-    .\bin\Release\net8.0\gps-iap-managing.exe --list -l
+    dotnet run -- --list -l
 
 To reset local prices to the default prices:
 
-    .\bin\Release\net8.0\gps-iap-managing.exe --restore
+    dotnet run -- --restore
 
 To localize the prices:
 
-    .\bin\Release\net8.0\gps-iap-managing.exe --localize
+    dotnet run -- --localize
+
+_first extra `--` its delimiter for `dotnet run` so you can pass any parameters and they all will be passe to our program instead of `dotnet run` command._
+
 
