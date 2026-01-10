@@ -114,15 +114,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                 Console.WriteLine("Sending IAP to Google Play Console...");
 
-                // Update all products using BatchUpdate
-                var updateRequests = listResponse.OneTimeProducts.Select(product => new UpdateOneTimeProductRequest
-                {
-                    OneTimeProduct = product,
-                    UpdateMask = "purchaseOptions",
-                    RegionsVersion = product.RegionsVersion
-                }).ToList();
-
-                await updateRequests.SendWithRetryAsync(Service, Package);
+                await listResponse.OneTimeProducts.SendWithRetryAsync(Service, Package);
 
                 if (verbose)
                 {
