@@ -1,7 +1,7 @@
 using System.Text;
 using Google.Apis.AndroidPublisher.v3.Data;
 
-namespace gps_iap_managing
+namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 {
     public static class Extensions
     {
@@ -69,16 +69,65 @@ namespace gps_iap_managing
 
             return $"{total:0.00} {money.CurrencyCode}";
         }
-        
+
         public static decimal ToDecimalPrice(this Money money)
         {
-            if (money == null) 
-            return 0;
+            if (money == null)
+                return 0;
 
             double fractionalPart = (money.Nanos ?? 0) / 1_000_000_000.0;
             double total = (money.Units ?? 0) + fractionalPart;
 
             return (decimal)total;
+        }
+
+        public static async Task SendWithRetryAsync(this IList<UpdateOneTimeProductRequest> updateRequests, Google.Apis.AndroidPublisher.v3.AndroidPublisherService service, string package, int maxRetries = 5)
+        {
+            // we have TIMEOUT EXCEPTIONS
+            // so lets update one IAP per request
+
+            var count = updateRequests.Count();
+            var q = 0;
+            foreach (var updateRequest in updateRequests)
+            {
+                q++;
+                Console.WriteLine($"Sending BatchUpdate {q}/{count} for {updateRequest.OneTimeProduct.ProductId}...");
+
+                var batchUpdateRequest = new BatchUpdateOneTimeProductsRequest
+                {
+                    Requests = [updateRequest]
+                };
+
+                // also leta add retry logic
+                // if a request fails (timeout or glitch), we try 3 times before giving up
+                var currentRetry = 0;
+                var success = false;
+
+                while (currentRetry < maxRetries && !success)
+                {
+                    try
+                    {
+                        var batchRequest = service!.Monetization.Onetimeproducts.BatchUpdate(batchUpdateRequest, package);
+                        await batchRequest.ExecuteAsync();
+                        success = true; // It worked! Exit the retry loop
+                    }
+                    catch (Exception ex)
+                    {
+                        currentRetry++;
+                        Console.WriteLine($"  [Attempt {currentRetry}/{maxRetries}] Failed: {ex.Message}");
+
+                        if (currentRetry >= maxRetries)
+                        {
+                            Console.WriteLine($"  >>> SKIPPING {updateRequest.OneTimeProduct.ProductId} after {maxRetries} failed attempts.");
+                        }
+                        else
+                        {
+                            Console.WriteLine("  Waiting 5 seconds before retrying...");
+                            await Task.Delay(TimeSpan.FromSeconds(5));
+                        }
+                    }
+                }
+            }
         }
     }
 }

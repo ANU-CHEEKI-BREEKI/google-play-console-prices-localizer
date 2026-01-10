@@ -1,8 +1,6 @@
-using Google.Apis.AndroidPublisher.v3;
 using Google.Apis.AndroidPublisher.v3.Data;
-using Newtonsoft.Json;
 
-namespace gps_iap_managing
+namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 {
     public class Command_Restore : CommandBase
     {
@@ -121,16 +119,10 @@ namespace gps_iap_managing
                 {
                     OneTimeProduct = product,
                     UpdateMask = "purchaseOptions",
-                    RegionsVersion = product.RegionsVersion // ?? new RegionsVersion { Version = "2022/02" }
+                    RegionsVersion = product.RegionsVersion
                 }).ToList();
 
-                var batchUpdateRequest = new BatchUpdateOneTimeProductsRequest
-                {
-                    Requests = updateRequests
-                };
-
-                var batchRequest = Service!.Monetization.Onetimeproducts.BatchUpdate(batchUpdateRequest, Package);
-                await batchRequest.ExecuteAsync();
+                await updateRequests.SendWithRetryAsync(Service, Package);
 
                 if (verbose)
                 {

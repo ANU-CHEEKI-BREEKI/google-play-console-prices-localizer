@@ -1,6 +1,6 @@
 using Google.Apis.AndroidPublisher.v3;
 
-namespace gps_iap_managing
+namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 {
     public abstract class CommandBase
     {

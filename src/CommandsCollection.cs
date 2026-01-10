@@ -1,4 +1,4 @@
-namespace gps_iap_managing
+namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 {
     public class CommandsCollection : List<CommandBase>
     {
