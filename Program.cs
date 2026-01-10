@@ -1,6 +1,6 @@
 ﻿using Google.Apis.AndroidPublisher.v3;
 using Google.Apis.Auth.OAuth2;
-using gps_iap_managing;
+using ANU.APIs.GoogleDeveloperAPI.IAPManaging;
 using static Google.Apis.Services.BaseClientService;
 
 var commands = new CommandsCollection()
@@ -47,6 +47,8 @@ using var service = new AndroidPublisherService(new Initializer()
     ApplicationName = "IAP managing"
 });
 
+// set larger timeout
+service.HttpClient.Timeout = TimeSpan.FromMinutes(5);
 
 command.Initialize(service, config, args);
 await command.ExecuteAsync();
