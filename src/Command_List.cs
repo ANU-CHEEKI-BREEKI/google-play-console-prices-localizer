@@ -1,7 +1,3 @@
-using Google.Apis.AndroidPublisher.v3;
-using Google.Apis.AndroidPublisher.v3.Data;
-using static Google.Apis.AndroidPublisher.v3.MonetizationResource;
-
 namespace gps_iap_managing
 {
     public class Command_List : CommandBase
@@ -17,11 +13,11 @@ namespace gps_iap_managing
 
                 Console.WriteLine("receiving IAP list...");
 
-                var listRequest = new InappproductsResource.ListRequest(Service, Package);
+                var listRequest = Service.Monetization.Onetimeproducts.List(Package);
                 var listResponse = await listRequest.ExecuteAsync();
 
                 Console.WriteLine("current IAP");
-                listResponse.Inappproduct.PrintIapList(printPrices);
+                listResponse.OneTimeProducts.PrintIapList(printPrices);
             }
             catch (Exception ex)
             {

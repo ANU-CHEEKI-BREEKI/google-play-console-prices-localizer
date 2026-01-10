@@ -8,18 +8,31 @@ var commands = new CommandsCollection()
     new Command_List(),
     new Command_Restore(),
     new Command_LocalizePrices(),
-    new Command_RestoreReversed(),
-    new Command_LocalizePricesReversed(),
 };
 
 if (commands.TryPrintHelp(args))
     return;
 
-var config = await CommandLinesUtils.LoadJson<Config>(args, false, "--config", "../config.json");
+var command = commands.FirstOrDefault(c => c.IsMatches(args));
+if (command is null)
+{
+    Console.WriteLine("no command fount for passed parameters");
+    return;
+}
+
+var resolvedPathGetter = new CommandLinesUtils.ResolvedPathGetter();
+var config = await CommandLinesUtils.LoadJson<Config>(args, false, "--config", "../config.json", resolvedPathGetter);
 if (config is null)
     throw new ArgumentNullException("config");
 
 using var canceller = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+// patch paths to be relative to config file
+var absoluteConfigPath = Path.GetFullPath(resolvedPathGetter.ResolvedPath);
+var configDirectory = Path.GetDirectoryName(absoluteConfigPath);
+
+config.CredentialsFilePath = Path.Combine(configDirectory, config.CredentialsFilePath);
+config.DefaultPricesFilePath = Path.Combine(configDirectory, config.DefaultPricesFilePath);
 
 var credentials = await GoogleWebAuthorizationBroker.AuthorizeAsync(
     (await GoogleClientSecrets.FromFileAsync(config.CredentialsFilePath)).Secrets,
@@ -34,12 +47,6 @@ using var service = new AndroidPublisherService(new Initializer()
     ApplicationName = "IAP managing"
 });
 
-var command = commands.FirstOrDefault(c => c.IsMatches(args));
-if (command is null)
-{
-    Console.WriteLine("no command fount for passed parameters");
-    return;
-}
 
 command.Initialize(service, config, args);
 await command.ExecuteAsync();
