@@ -20,7 +20,6 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             Config = config;
         }
 
-        public abstract bool IsMatches(string[] args);
         public abstract Task ExecuteAsync();
         public abstract void PrintHelp();
     }
