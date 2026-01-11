@@ -71,10 +71,13 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
             foreach (var item in this)
             {
-                Console.WriteLine(item.Name);
-                CommandLinesUtils.PrintDescription(item.Description);
+                CommandLinesUtils.PrintOption(item.Name, item.Description);
                 Console.WriteLine();
             }
+
+            Console.WriteLine();
+            Console.WriteLine("Run '<executable> [command] --help|-h' for more information on a command.");
+            Console.WriteLine();
 
             return true;
         }
