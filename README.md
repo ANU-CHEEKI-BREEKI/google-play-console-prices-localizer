@@ -26,7 +26,7 @@ In this repository, there is a program that will help you ***automatically*** up
 
 One command:
 
-    dotnet run --localize
+    dotnet run localize
 
 And all prices will be localized!
 
@@ -104,10 +104,10 @@ Then download the **`Client secrets`** of the created OAuth desktop client. This
 
 ### A couple more commands
 
-`--list [-l]`
+`list [-l]`
     To simply list all IAPs in your project. `-l` To print all local prices, instead of only default prices.
 
-`--restore [-v] [-l]`
+`restore [-v] [-l]`
     To reset all local prices to the default prices. `-v` To see IAPs lists during restoring, `-l` to also see local prices
 
 ---
@@ -142,15 +142,15 @@ Then, your commands will likely look like this:
 
 To see the list of all IAPs:
 
-    dotnet run -- --list -l
+    dotnet run -- list -l
 
 To reset local prices to the default prices:
 
-    dotnet run -- --restore
+    dotnet run -- restore
 
 To localize the prices:
 
-    dotnet run -- --localize
+    dotnet run -- localize
 
 _first extra `--` its delimiter for `dotnet run` so you can pass any parameters and they all will be passe to our program instead of `dotnet run` command._
 
