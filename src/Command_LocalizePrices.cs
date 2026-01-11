@@ -6,7 +6,6 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
     {
         public override async Task ExecuteAsync()
         {
-
             try
             {
                 var verbose = Args.Contains("-v");
@@ -15,20 +14,26 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 Console.WriteLine("loading default prices...");
 
                 var resolvedPath = new CommandLinesUtils.ResolvedPathGetter();
-                var defaultPrices = await CommandLinesUtils.LoadJson<ProductConfigs>(Args, verbose, "--prices-path", Config.DefaultPricesFilePath, resolvedPath);
+                var defaultPrices = await CommandLinesUtils.LoadJson<ProductConfigs>(Config.DefaultPricesFilePath, Config.DefaultPricesFilePath, verbose, resolvedPath);
                 if (defaultPrices == null)
                 {
                     Console.WriteLine($"Failed to load default prices from {resolvedPath.ResolvedPath}");
                     return;
                 }
 
-                var pricesTemplate = await CommandLinesUtils.LoadJson<LocalizedPricesPercentagesConfigs>(Args, verbose, "--path", "./configs/localized-prices-template.json", resolvedPath);
+                var pricesTemplate = await CommandLinesUtils.LoadJson<LocalizedPricesPercentagesConfigs>(Config.LocalizedPricesTemplateFilePath, "./configs/localized-prices-template.json", verbose, resolvedPath);
                 if (pricesTemplate is null)
                 {
                     Console.WriteLine($"Failed to load localized prices template from {resolvedPath.ResolvedPath}");
                     return;
                 }
-                var roundPricesArray = await CommandLinesUtils.LoadJson<string[]>(Args, verbose, "--roundPricesPath", "./configs/round-prices-for.json");
+                var roundPricesArray = await CommandLinesUtils.LoadJson<string[]>(Config.RoundPricesForFilePath, "./configs/round-prices-for.json", verbose, resolvedPath);
+                if (roundPricesArray is null)
+                {
+                    Console.WriteLine($"Failed to load round prices list from {resolvedPath.ResolvedPath}");
+                    return;
+                }
+
                 var roundPricesFor = new HashSet<string>(roundPricesArray ?? Array.Empty<string>());
 
                 Console.WriteLine("receiving IAP list...");
@@ -36,15 +41,17 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 var listRequest = Service.Monetization.Onetimeproducts.List(Package);
                 var listResponse = await listRequest.ExecuteAsync();
 
+                var products = listResponse.OneTimeProducts.Filter(Config.Iap).ToList();
+
                 if (verbose)
                 {
                     Console.WriteLine("current IAP");
-                    listResponse.OneTimeProducts.PrintIapList(printLocalPrices);
+                    products.PrintIapList(printLocalPrices, Config.DefaultRegion);
                 }
 
                 Console.WriteLine("calculating localized prices...");
 
-                foreach (var product in listResponse.OneTimeProducts)
+                foreach (var product in products)
                 {
                     var legacyOption = product.PurchaseOptions
                         ?.FirstOrDefault(po => po.BuyOption?.LegacyCompatible == true);
@@ -69,7 +76,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                     var baseMoney = new Money
                     {
-                        CurrencyCode = Config.DefaultCurrency,
+                        CurrencyCode = Config.DefaultCurrency ?? "USD",
                         Units = units,
                         Nanos = nanos
                     };
@@ -140,12 +147,12 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 if (verbose)
                 {
                     Console.WriteLine("Local updated prices:");
-                    listResponse.OneTimeProducts.PrintIapList(printLocalPrices);
+                    products.PrintIapList(printLocalPrices, Config.DefaultRegion);
                 }
 
                 Console.WriteLine("Sending IAP to Google Play Console...");
 
-                await listResponse.OneTimeProducts.SendWithRetryAsync(Service, Package);
+                await products.SendWithRetryAsync(Service, Package);
 
                 if (verbose)
                 {
@@ -154,7 +161,9 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     // Fetch the updated list
                     var updatedListRequest = Service!.Monetization.Onetimeproducts.List(Package);
                     var updatedListResponse = await updatedListRequest.ExecuteAsync();
-                    updatedListResponse.OneTimeProducts.PrintIapList(printLocalPrices);
+                    updatedListResponse.OneTimeProducts
+                        .Filter(Config.Iap)
+                        .PrintIapList(printLocalPrices, Config.DefaultRegion);
                 }
             }
             catch (Exception ex)
@@ -163,19 +172,44 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             }
         }
 
-        public override bool IsMatches(string[] args) => args.Contains("--localize");
+        public override bool IsMatches(string[] args)
+            => args.Length > 0 && args[0].Equals("localize", StringComparison.OrdinalIgnoreCase);
+
+        public override string Name => "localize";
+        public override string Description => "Recalculates prices for all regions based on the default currency price provided in your JSON config and localized prices template.";
+
         public override void PrintHelp()
         {
-            Console.WriteLine("localize");
-            Console.WriteLine("    usage: --localize  [--path <localized-prices-template.json>] [--roundPricesPath <round-prices-for.json>] [-v]  [-l]");
-            Console.WriteLine("    restore prices and then update all local prices to match percentages in config");
-            Console.WriteLine("    --path path to json file that contains dictionary AA to x%");
-            Console.WriteLine("    where AA country code, and x% price percentage from default price");
-            Console.WriteLine("    default path is ./configs/localized-prices-template.json");
-            Console.WriteLine("    --roundPricesPath path to json file that tells for which countries prices should be rounded. Because google does not allow prices like 4,99 for some countries.");
-            Console.WriteLine("    default path is ./configs/round-prices-for.json");
-            Console.WriteLine("    -v  print IAP list");
-            Console.WriteLine("    -l  print local prices");
+            Console.WriteLine("localize [--prices <path>] [--localized-template <path>] [--round-prices <path>] [-v] [-l]");
+            Console.WriteLine();
+            Console.WriteLine();
+
+            Console.WriteLine(Name);
+            Console.WriteLine("    usage: localize [--prices <path-to-default-prices.json>] [--localized-template <path-to-localized-template.json>] [--round-prices <path-to-round-prices.json>] [-v] [-l]");
+
+            Console.WriteLine("    description:");
+            CommandLinesUtils.PrintDescription(Description);
+
+            Console.WriteLine("options:");
+
+            CommandLinesUtils.PrintOption(
+                "--localized-template <path>",
+                "Specifies path to json with percentages for each region that needs to be localized. Default path is: ./configs/localized-prices-template.json"
+            );
+            CommandLinesUtils.PrintOption(
+                "--round-prices <path>",
+                "Specifies path to json with list of regions for which prices should be rounded. Required since Google Play enforces some regions prices to be rounded. Default path is: ./configs/round-prices-for.json"
+            );
+
+            CommandLinesUtils.PrintOption(
+                "-v",
+                "Include additional verbose output"
+            );
+            CommandLinesUtils.PrintOption(
+                "-l",
+                "Include local pricing for all regions"
+            );
+
         }
     }
 }

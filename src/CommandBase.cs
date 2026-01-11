@@ -10,6 +10,9 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public string Package => Config.PackageName;
 
+        public abstract string Name { get; }
+        public abstract string Description { get; }
+
         public void Initialize(AndroidPublisherService service, Config config, string[] args)
         {
             Args = args;
