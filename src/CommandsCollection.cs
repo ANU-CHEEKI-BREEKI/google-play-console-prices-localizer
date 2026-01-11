@@ -14,6 +14,17 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             Console.WriteLine("mainly designed to fast and easily localize In-App Purchase prices for all available countries");
             Console.WriteLine("------------------------------------------------------------------------------------------------");
             Console.WriteLine();
+            Console.WriteLine();
+            Console.WriteLine("------------------------------------------------------------------------------------------------");
+            Console.WriteLine("----------------------------------### ATTENTION ###---------------------------------------------");
+            Console.WriteLine("------------------------------------------------------------------------------------------------");
+            Console.WriteLine("");
+            Console.WriteLine("THE PROJECT WAS UPDATED TO USE NEW GOOGLE APIS FOR Onetimeproducts");
+            Console.WriteLine("but, since i (as Unity game-dev) dont use IAP purchase options, and use only the Default purchase option,");
+            Console.WriteLine("this project designed to work only with single 'LegacyCompatible'/'Backward compatible' purchase options");
+            Console.WriteLine("");
+            Console.WriteLine("------------------------------------------------------------------------------------------------");
+            Console.WriteLine();
             Console.WriteLine("usage:");
             Console.WriteLine();
             Console.WriteLine("<command> [command-options] [--config <path_to_config.json>] [config-options]");
