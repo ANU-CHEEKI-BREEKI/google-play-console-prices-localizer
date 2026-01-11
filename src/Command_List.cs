@@ -40,14 +40,11 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             Console.WriteLine();
             Console.WriteLine();
 
-            Console.WriteLine(Name);
-
-            Console.WriteLine("    usage: list [-l] [-v]");
-
-            Console.WriteLine("    description:");
+            Console.WriteLine("description:");
             CommandLinesUtils.PrintDescription(Description);
 
-            Console.WriteLine("    options:");
+            Console.WriteLine();
+            Console.WriteLine("options:");
             CommandLinesUtils.PrintOption(
                 "-l",
                 "Include local pricing for all regions"

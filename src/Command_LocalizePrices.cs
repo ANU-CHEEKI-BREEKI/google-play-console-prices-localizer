@@ -180,16 +180,14 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("localize [--prices <path>] [--localized-template <path>] [--round-prices <path>] [-v] [-l]");
+            Console.WriteLine("localize [--prices <path-to-default-prices.json>] [--localized-template <path-to-localized-template.json>] [--round-prices <path-to-round-prices.json>] [-v] [-l]");
             Console.WriteLine();
             Console.WriteLine();
 
-            Console.WriteLine(Name);
-            Console.WriteLine("    usage: localize [--prices <path-to-default-prices.json>] [--localized-template <path-to-localized-template.json>] [--round-prices <path-to-round-prices.json>] [-v] [-l]");
-
-            Console.WriteLine("    description:");
+            Console.WriteLine("description:");
             CommandLinesUtils.PrintDescription(Description);
 
+            Console.WriteLine();
             Console.WriteLine("options:");
 
             CommandLinesUtils.PrintOption(

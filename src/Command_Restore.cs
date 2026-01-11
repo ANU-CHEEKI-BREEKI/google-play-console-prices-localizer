@@ -145,18 +145,15 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("restore [--prices <path>] [-v] [-l]");
+            Console.WriteLine("restore [--prices <path-to-default-prices.json>] [-v] [-l]");
             Console.WriteLine();
             Console.WriteLine();
 
-            Console.WriteLine(Name);
-
-            Console.WriteLine("    usage: restore [--prices <path-to-default-prices.json>] [-v] [-l]");
-
-            Console.WriteLine("    description:");
+            Console.WriteLine("description:");
             CommandLinesUtils.PrintDescription(Description);
 
-            Console.WriteLine("    options:");
+            Console.WriteLine();
+            Console.WriteLine("options:");
 
             CommandLinesUtils.PrintOption(
                 "-v",
