@@ -172,9 +172,6 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             }
         }
 
-        public override bool IsMatches(string[] args)
-            => args.Length > 0 && args[0].Equals("localize", StringComparison.OrdinalIgnoreCase);
-
         public override string Name => "localize";
         public override string Description => "Recalculates prices for all regions based on the default currency price provided in your JSON config and localized prices template.";
 
@@ -190,6 +187,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             Console.WriteLine();
             Console.WriteLine("options:");
 
+            CommandLinesUtils.PrintOption(
+                "--prices <path>",
+                "Specifies path to json with default prices in default currency. If not specified, used path from global config json."
+            );
             CommandLinesUtils.PrintOption(
                 "--localized-template <path>",
                 "Specifies path to json with percentages for each region that needs to be localized. Default path is: ./configs/localized-prices-template.json"
@@ -207,7 +208,6 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "-l",
                 "Include local pricing for all regions"
             );
-
         }
     }
 }

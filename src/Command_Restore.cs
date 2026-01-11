@@ -137,11 +137,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             }
         }
 
-        public override bool IsMatches(string[] args)
-            => args.Length > 0 && args[0].Equals("restore", StringComparison.OrdinalIgnoreCase);
-
         public override string Name => "restore";
-        public override string Description => "Recalculates prices for all regions based on the default currency price provided in your JSON config. This ensures consistency across your entire IAP catalog.";
+        public override string Description => "Recalculates prices for all regions based on the default currency price provided in your JSON config.";
 
         public override void PrintHelp()
         {

@@ -28,9 +28,6 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             }
         }
 
-        public override bool IsMatches(string[] args)
-            => args.Length > 0 && args[0].Equals("list", StringComparison.OrdinalIgnoreCase);
-
         public override string Name => "list";
         public override string Description => "Lists all One-time products in the project, and their prices for specified region.";
 
@@ -53,7 +50,6 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "-v",
                 "Include detailed verbose output"
             );
-
         }
     }
 }

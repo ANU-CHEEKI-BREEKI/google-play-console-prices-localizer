@@ -72,7 +72,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             );
             CommandLinesUtils.PrintOption(
                 "--iap <iap-id>",
-                "Specify the ID of a specific In-App Purchase to display."
+                "Specify the ID of a specific In-App Purchase to run command for."
             );
 
             Console.WriteLine();

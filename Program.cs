@@ -13,7 +13,7 @@ var commands = new CommandsCollection()
 if (commands.TryPrintHelp(args))
     return;
 
-var command = commands.FirstOrDefault(c => c.IsMatches(args));
+var command = commands.FirstOrDefault(c => Array.IndexOf(args, c.Name) == 0);
 if (command is null)
 {
     Console.WriteLine("no command fount for passed parameters");
@@ -48,12 +48,29 @@ if (config is null)
 
 using var canceller = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
+
 // patch paths to be relative to config file
 var absoluteConfigPath = Path.GetFullPath(resolvedPathGetter.ResolvedPath);
 var configDirectory = Path.GetDirectoryName(absoluteConfigPath);
 
 config.CredentialsFilePath = Path.Combine(configDirectory, config.CredentialsFilePath);
 config.DefaultPricesFilePath = Path.Combine(configDirectory, config.DefaultPricesFilePath);
+config.LocalizedPricesTemplateFilePath = Path.Combine(configDirectory, config.LocalizedPricesTemplateFilePath);
+config.RoundPricesForFilePath = Path.Combine(configDirectory, config.RoundPricesForFilePath);
+
+
+// patch config with explicit command line options
+config.PackageName = args.TryGetOption("--package", config.PackageName);
+config.CredentialsFilePath = args.TryGetOption("--credentials", config.CredentialsFilePath);
+config.DefaultPricesFilePath = args.TryGetOption("--prices", config.DefaultPricesFilePath);
+
+config.LocalizedPricesTemplateFilePath = args.TryGetOption("--localized-template", config.LocalizedPricesTemplateFilePath);
+config.RoundPricesForFilePath = args.TryGetOption("--round-prices", config.RoundPricesForFilePath);
+
+config.DefaultRegion = args.TryGetOption("--region", config.DefaultRegion);
+config.DefaultCurrency = args.TryGetOption("--currency", config.DefaultCurrency);
+config.Iap = args.TryGetOption("--iap", config.Iap);
+
 
 var credentials = await GoogleWebAuthorizationBroker.AuthorizeAsync(
     (await GoogleClientSecrets.FromFileAsync(config.CredentialsFilePath)).Secrets,
@@ -71,21 +88,10 @@ using var service = new AndroidPublisherService(new Initializer()
 // set larger timeout
 service.HttpClient.Timeout = TimeSpan.FromMinutes(5);
 
-config.PackageName = args.TryGetOption("--package", config.PackageName);
-config.CredentialsFilePath = args.TryGetOption("--credentials", config.CredentialsFilePath);
-config.DefaultPricesFilePath = args.TryGetOption("--prices", config.DefaultPricesFilePath);
-
-config.LocalizedPricesTemplateFilePath = args.TryGetOption("--localized-template", config.LocalizedPricesTemplateFilePath);
-config.RoundPricesForFilePath = args.TryGetOption("--round-prices", config.RoundPricesForFilePath);
-
-// patch config with explicit command line options
-config.DefaultRegion = args.TryGetOption("--region", config.DefaultRegion);
-config.DefaultCurrency = args.TryGetOption("--currency", config.DefaultCurrency);
-config.Iap = args.TryGetOption("--iap", config.Iap);
-
 Console.WriteLine();
 
 command.Initialize(service, config, args);
 await command.ExecuteAsync();
 
 Console.WriteLine();
+Console.WriteLine("done.");
