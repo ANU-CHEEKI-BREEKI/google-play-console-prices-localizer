@@ -30,14 +30,17 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         public static string FormattedPrice(this Price price)
             => $"{decimal.Parse(price.PriceMicros) / 1_000_000} {price.Currency}";
 
-        public static void PrintIapList(this IList<OneTimeProduct> products, bool printLocalPrices)
+        public static IEnumerable<OneTimeProduct> Filter(this IEnumerable<OneTimeProduct> products, string filterIAP)
+            => products.Where(p => string.IsNullOrEmpty(filterIAP) || p.ProductId == filterIAP);
+
+        public static void PrintIapList(this IEnumerable<OneTimeProduct> products, bool printLocalPrices, string? defaultRegion = null)
         {
             var stringPairs = new List<StringPairs>();
 
             foreach (var product in products)
             {
                 var option = product.PurchaseOptions.First(po => po.BuyOption.LegacyCompatible == true);
-                var usPrice = option.RegionalPricingAndAvailabilityConfigs.First(price => price.RegionCode == "US");
+                var usPrice = option.RegionalPricingAndAvailabilityConfigs.First(price => price.RegionCode == (defaultRegion ?? "US"));
 
                 stringPairs.Add(new StringPairs { A = product.ProductId, B = usPrice.Price.FormattedPrice() });
 

@@ -20,10 +20,31 @@ if (command is null)
     return;
 }
 
+if (args.HasFlag("-h")
+    || args.HasFlag("--help"))
+{
+    Console.WriteLine();
+    Console.WriteLine();
+    command.PrintHelp();
+    Console.WriteLine();
+    Console.WriteLine();
+    return;
+}
+
 var resolvedPathGetter = new CommandLinesUtils.ResolvedPathGetter();
-var config = await CommandLinesUtils.LoadJson<Config>(args, false, "--config", "../config.json", resolvedPathGetter);
+var configPath = args.TryGetOption("--config", "../config.json");
+
+var verbose = args.HasFlag("-v");
+
+var config = await CommandLinesUtils.LoadJson<Config>(
+    configPath,
+    Path.Combine(configPath, "config.json"),
+    verbose,
+    resolvedPathGetter
+);
+
 if (config is null)
-    throw new ArgumentNullException("config");
+    config = new();
 
 using var canceller = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
@@ -50,7 +71,21 @@ using var service = new AndroidPublisherService(new Initializer()
 // set larger timeout
 service.HttpClient.Timeout = TimeSpan.FromMinutes(5);
 
+config.PackageName = args.TryGetOption("--package", config.PackageName);
+config.CredentialsFilePath = args.TryGetOption("--credentials", config.CredentialsFilePath);
+config.DefaultPricesFilePath = args.TryGetOption("--prices", config.DefaultPricesFilePath);
+
+config.LocalizedPricesTemplateFilePath = args.TryGetOption("--localized-template", config.LocalizedPricesTemplateFilePath);
+config.RoundPricesForFilePath = args.TryGetOption("--round-prices", config.RoundPricesForFilePath);
+
+// patch config with explicit command line options
+config.DefaultRegion = args.TryGetOption("--region", config.DefaultRegion);
+config.DefaultCurrency = args.TryGetOption("--currency", config.DefaultCurrency);
+config.Iap = args.TryGetOption("--iap", config.Iap);
+
+Console.WriteLine();
+
 command.Initialize(service, config, args);
 await command.ExecuteAsync();
 
-Console.WriteLine("done.");
+Console.WriteLine();

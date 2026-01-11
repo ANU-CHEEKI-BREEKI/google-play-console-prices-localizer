@@ -13,7 +13,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                 Console.WriteLine("loading default prices...");
 
-                var defaultPrices = await CommandLinesUtils.LoadJson<ProductConfigs>(Args, verbose, "--prices-path", Config.DefaultPricesFilePath);
+                var defaultPrices = await CommandLinesUtils.LoadJson<ProductConfigs>(Config.DefaultPricesFilePath, Config.DefaultPricesFilePath, verbose);
                 if (defaultPrices == null)
                 {
                     Console.WriteLine($"Failed to load default prices from {Config.DefaultPricesFilePath}");
@@ -25,15 +25,17 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 var listRequest = Service.Monetization.Onetimeproducts.List(Package);
                 var listResponse = await listRequest.ExecuteAsync();
 
+                var products = listResponse.OneTimeProducts.Filter(Config.Iap).ToList();
+
                 if (verbose)
                 {
                     Console.WriteLine("current IAP");
-                    listResponse.OneTimeProducts.PrintIapList(printLocalPrices);
+                    products.PrintIapList(printLocalPrices, Config.DefaultRegion);
                 }
 
                 Console.WriteLine("resetting prices to default...");
 
-                foreach (var product in listResponse.OneTimeProducts)
+                foreach (var product in products)
                 {
                     var legacyOption = product.PurchaseOptions
                         ?.FirstOrDefault(po => po.BuyOption?.LegacyCompatible == true);
@@ -58,7 +60,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                     var baseMoney = new Money
                     {
-                        CurrencyCode = Config.DefaultCurrency,
+                        CurrencyCode = Config.DefaultCurrency ?? "USD",
                         Units = units,
                         Nanos = nanos
                     };
@@ -109,12 +111,12 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 if (verbose)
                 {
                     Console.WriteLine("Local updated prices:");
-                    listResponse.OneTimeProducts.PrintIapList(false);
+                    products.PrintIapList(false, Config.DefaultRegion);
                 }
 
                 Console.WriteLine("Sending IAP to Google Play Console...");
 
-                await listResponse.OneTimeProducts.SendWithRetryAsync(Service, Package);
+                await products.SendWithRetryAsync(Service, Package);
 
                 if (verbose)
                 {
@@ -123,7 +125,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     // Fetch the updated list
                     var updatedListRequest = Service!.Monetization.Onetimeproducts.List(Package);
                     var updatedListResponse = await updatedListRequest.ExecuteAsync();
-                    updatedListResponse.OneTimeProducts.PrintIapList(printLocalPrices);
+                    updatedListResponse
+                        .OneTimeProducts
+                        .Filter(Config.Iap)
+                        .PrintIapList(printLocalPrices, Config.DefaultRegion);
                 }
             }
             catch (Exception ex)
@@ -132,14 +137,35 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             }
         }
 
-        public override bool IsMatches(string[] args) => args.Contains("--restore");
+        public override bool IsMatches(string[] args)
+            => args.Length > 0 && args[0].Equals("restore", StringComparison.OrdinalIgnoreCase);
+
+        public override string Name => "restore";
+        public override string Description => "Recalculates prices for all regions based on the default currency price provided in your JSON config. This ensures consistency across your entire IAP catalog.";
+
         public override void PrintHelp()
         {
-            Console.WriteLine("restore");
-            Console.WriteLine("    usage: --restore --prices-path <path-to-default-prices.json> [-v] [-l]");
-            Console.WriteLine("    automatically recalculate prices based on default price");
-            Console.WriteLine("    -v  print IAP list");
-            Console.WriteLine("    -l  print local prices");
+            Console.WriteLine("restore [--prices <path>] [-v] [-l]");
+            Console.WriteLine();
+            Console.WriteLine();
+
+            Console.WriteLine(Name);
+
+            Console.WriteLine("    usage: restore [--prices <path-to-default-prices.json>] [-v] [-l]");
+
+            Console.WriteLine("    description:");
+            CommandLinesUtils.PrintDescription(Description);
+
+            Console.WriteLine("    options:");
+
+            CommandLinesUtils.PrintOption(
+                "-v",
+                "Include additional verbose output"
+            );
+            CommandLinesUtils.PrintOption(
+                "-l",
+                "Include local pricing for all regions"
+            );
         }
     }
 }
