@@ -16,10 +16,22 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         public DateTime GeneratedAtUtc { get; set; }
 
         public List<VitalsFreshness> Freshness { get; set; } = [];
+        public List<VitalsRelease> Releases { get; set; } = [];
         public List<VitalsSection> Sections { get; set; } = [];
         public List<VitalsIssue> Issues { get; set; } = [];
         public List<VitalsAnomaly> Anomalies { get; set; } = [];
         public List<string> Errors { get; set; } = [];
+    }
+
+    /// <summary>
+    /// A release currently serving on some track. Without this the versionCode breakdowns
+    /// are just numbers, and 'is 1.4.5 better than 1.4.4' cannot be answered from the report.
+    /// </summary>
+    public sealed class VitalsRelease
+    {
+        public string Track { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+        public List<string> VersionCodes { get; set; } = [];
     }
 
     public sealed class VitalsFreshness

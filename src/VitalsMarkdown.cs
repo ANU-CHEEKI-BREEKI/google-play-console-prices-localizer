@@ -34,6 +34,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 sb.AppendLine();
             }
 
+            AppendReleases(sb, report);
             AppendFreshness(sb, report);
             AppendSummary(sb, report);
 
@@ -57,6 +58,20 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             sb.AppendLine("- `impact` is `Σ(rate × distinctUsers)` for rates, i.e. roughly how many user-days were hit. Breakdowns are ranked by it, so a 40% crash rate on 3 users does not outrank a 3% crash rate on the whole install base.");
             sb.AppendLine("- period totals of rates are user-weighted averages over the window, computed here from the daily rows.");
             sb.AppendLine("- `distinctUsers` is rounded by Google (to 10/100/1K/1M depending on magnitude), so small slices are approximate.");
+            sb.AppendLine();
+        }
+
+        static void AppendReleases(StringBuilder sb, VitalsReport report)
+        {
+            if (report.Releases.Count == 0)
+                return;
+
+            sb.AppendLine("## Releases currently serving");
+            sb.AppendLine();
+            sb.AppendLine("| track | release | version codes |");
+            sb.AppendLine("|---|---|---|");
+            foreach (var release in report.Releases)
+                sb.AppendLine($"| {Escape(release.Track)} | {Escape(release.DisplayName)} | {string.Join(", ", release.VersionCodes)} |");
             sb.AppendLine();
         }
 

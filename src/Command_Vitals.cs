@@ -75,6 +75,33 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 GeneratedAtUtc = DateTime.UtcNow,
             };
 
+            try
+            {
+                var options = await ReportingService!.Apps.FetchReleaseFilterOptions($"apps/{Package}").ExecuteAsync();
+
+                foreach (var track in options.Tracks ?? [])
+                {
+                    foreach (var release in track.ServingReleases ?? [])
+                    {
+                        report.Releases.Add(new VitalsRelease
+                        {
+                            Track = track.DisplayName ?? track.Type ?? "",
+                            DisplayName = release.DisplayName ?? "",
+                            VersionCodes = [.. (release.VersionCodes ?? []).Select(c => c.ToString())],
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                report.Errors.Add($"releases: {Describe(ex)}");
+            }
+
+            var releaseNames = report.Releases
+                .SelectMany(r => r.VersionCodes.Select(code => (code, r.DisplayName)))
+                .GroupBy(x => x.code)
+                .ToDictionary(g => g.Key, g => g.First().DisplayName);
+
             // freshness first: it tells us how far the data actually goes,
             // so we never ask for a tail of empty rows
             foreach (var set in sets)
@@ -192,7 +219,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                             Timeline = timeline,
                         }, maxPages);
 
-                        section.Breakdowns.Add(BuildBreakdown(set, dimension, rows, top));
+                        section.Breakdowns.Add(BuildBreakdown(set, dimension, rows, top, releaseNames));
                     }
                     catch (Exception ex)
                     {
@@ -493,7 +520,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             VitalsMetricSet set,
             string dimension,
             List<GooglePlayDeveloperReportingV1beta1MetricsRow> rows,
-            int top)
+            int top,
+            Dictionary<string, string> releaseNames)
         {
             var breakdown = new VitalsBreakdown
             {
@@ -512,7 +540,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                 slices.Add(new VitalsSlice
                 {
-                    Value = group.Key,
+                    // release display names already tend to embed the code ("103 (1.4.5)")
+                    Value = dimension == "versionCode" && releaseNames.TryGetValue(group.Key, out var release)
+                        ? (release.Contains(group.Key, StringComparison.Ordinal) ? release : $"{group.Key} ({release})")
+                        : group.Key,
                     UserDays = users,
                     Rate = users > 0 ? weighted / users : 0,
                     // for rates this is an estimate of how many user-days were actually hit,
