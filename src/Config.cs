@@ -10,6 +10,8 @@ public class Config
     public string DefaultRegion { get; set; } = "US";
     public string DefaultCurrency { get; set; } = "USD";
     public string Iap { get; set; } = "";
+
+    public string VitalsOutputPath { get; set; } = "./vitals-export";
 }
 
 public class ProductConfigs : Dictionary<string, decimal> { }

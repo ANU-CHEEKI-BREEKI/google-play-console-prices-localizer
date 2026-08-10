@@ -1,5 +1,6 @@
 ﻿using Google.Apis.AndroidPublisher.v3;
 using Google.Apis.Auth.OAuth2;
+using Google.Apis.Playdeveloperreporting.v1beta1;
 using ANU.APIs.GoogleDeveloperAPI.IAPManaging;
 using static Google.Apis.Services.BaseClientService;
 
@@ -8,6 +9,7 @@ var commands = new CommandsCollection()
     new Command_List(),
     new Command_Restore(),
     new Command_LocalizePrices(),
+    new Command_Vitals(),
 };
 
 if (commands.TryPrintHelp(args))
@@ -57,6 +59,7 @@ config.CredentialsFilePath = Path.Combine(configDirectory, config.CredentialsFil
 config.DefaultPricesFilePath = Path.Combine(configDirectory, config.DefaultPricesFilePath);
 config.LocalizedPricesTemplateFilePath = Path.Combine(configDirectory, config.LocalizedPricesTemplateFilePath);
 config.RoundPricesForFilePath = Path.Combine(configDirectory, config.RoundPricesForFilePath);
+config.VitalsOutputPath = Path.Combine(configDirectory, config.VitalsOutputPath);
 
 
 // patch config with explicit command line options
@@ -70,27 +73,39 @@ config.RoundPricesForFilePath = args.TryGetOption("--round-prices", config.Round
 config.DefaultRegion = args.TryGetOption("--region", config.DefaultRegion);
 config.DefaultCurrency = args.TryGetOption("--currency", config.DefaultCurrency);
 config.Iap = args.TryGetOption("--iap", config.Iap);
+config.VitalsOutputPath = args.TryGetOption("--out", config.VitalsOutputPath);
 
 
 var credentials = await GoogleWebAuthorizationBroker.AuthorizeAsync(
     (await GoogleClientSecrets.FromFileAsync(config.CredentialsFilePath)).Secrets,
-    [AndroidPublisherService.Scope.Androidpublisher],
-    "user",
+    command.RequiredScopes,
+    command.AuthUserKey,
     canceller.Token
 );
 
-using var service = new AndroidPublisherService(new Initializer()
+var initializer = new Initializer()
 {
     HttpClientInitializer = credentials,
     ApplicationName = "IAP managing"
-});
+};
+
+using var service = command.NeedsAndroidPublisher
+    ? new AndroidPublisherService(initializer)
+    : null;
+
+using var reportingService = command.NeedsPlayDeveloperReporting
+    ? new PlaydeveloperreportingService(initializer)
+    : null;
 
 // set larger timeout
-service.HttpClient.Timeout = TimeSpan.FromMinutes(5);
+if (service is not null)
+    service.HttpClient.Timeout = TimeSpan.FromMinutes(5);
+if (reportingService is not null)
+    reportingService.HttpClient.Timeout = TimeSpan.FromMinutes(5);
 
 Console.WriteLine();
 
-command.Initialize(service, config, args);
+command.Initialize(service, reportingService, config, args);
 await command.ExecuteAsync();
 
 Console.WriteLine();

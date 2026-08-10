@@ -112,6 +112,59 @@ Then download the **`Client secrets`** of the created OAuth desktop client. This
 
 ---
 
+### Android vitals export
+
+The Play Console shows crashes, ANRs, slow starts and the rest of Android vitals spread over dozens of screens,
+with the actually interesting slices (this device model, that API level, that one release) hidden behind filters.
+
+    dotnet run vitals
+
+exports all of it into **one markdown file** you can drop into ChatGPT/Claude and just ask *"what is wrong with my app?"*.
+
+The report contains:
+
+- daily (or hourly) timelines for crash rate, ANR rate and error report counts - including the `userPerceived*`
+  variants Google uses for the "bad behaviour" thresholds (2% crashes / 0.47% ANRs)
+- breakdowns by `versionCode`, `apiLevel`, `deviceModel` and `countryCode`, ranked by real impact
+  (`rate × affected users`), so a 40% crash rate on 3 devices does not drown out a regression on your whole install base
+- the top crash/ANR clusters with **full sample stack traces**, affected version/API ranges, links to the Console
+  and Google's own hints about the issue
+- anomalies Google detected on its own
+- data freshness per metric set, so you know how much of the tail is still missing
+
+Useful variants:
+
+    dotnet run vitals --days 56 --sets all --by all --top 25     # everything, wide
+    dotnet run vitals --period HOURLY --days 3 --sets crash,anr  # right after a release
+    dotnet run vitals --filter "versionCode = 1234" --issues 50  # one release, deep
+    dotnet run vitals --samples 0                                # numbers only, no stack traces
+    dotnet run vitals --max-trace-lines 0                        # full ANR thread dumps
+    dotnet run vitals --format both                              # markdown + raw json
+
+By default the window is the **last 28 days**, ending at the freshest data each metric set actually has
+(they are not equally fresh, so a section can end a day earlier than the rest - the report says so).
+**No version filter is applied** - all releases in the `OS_PUBLIC` cohort are included, and `versionCode`
+shows up as one of the breakdowns. Use `--filter "versionCode = 1234"` to narrow it down.
+
+Sample traces are trimmed to the first 150 lines, because an ANR report is a dump of *every* thread
+in the process and the blocked main thread is at the top.
+
+Run `dotnet run vitals --help` for the full option list.
+
+Reports are written to `VitalsOutputPath` from `config.json` (`./vitals-export` next to it by default),
+or to whatever you pass in `--out`.
+
+**Two things to set up first**, because this uses a *different* Google API than the IAP commands:
+
+1. enable **`Google Play Developer Reporting API`** in your [Google Cloud Console](https://console.cloud.google.com/apis/library/playdeveloperreporting.googleapis.com)
+   for the same project your OAuth client belongs to
+2. the first `vitals` run asks for consent again - it needs the `playdeveloperreporting` scope.
+   That token is cached separately, so your IAP commands keep working without re-consenting.
+
+Your Play Console account needs at least the *"View app information (read-only)"* permission for the app.
+
+---
+
 ### Examples
 
 1. You cloned the repository and built the program.

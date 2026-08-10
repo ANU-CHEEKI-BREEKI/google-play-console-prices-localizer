@@ -1,10 +1,12 @@
 using Google.Apis.AndroidPublisher.v3;
+using Google.Apis.Playdeveloperreporting.v1beta1;
 
 namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 {
     public abstract class CommandBase
     {
         public AndroidPublisherService? Service { get; set; }
+        public PlaydeveloperreportingService? ReportingService { get; set; }
         public Config Config { get; private set; } = null!;
         public string[] Args { get; set; } = null!;
 
@@ -13,10 +15,37 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         public abstract string Name { get; }
         public abstract string Description { get; }
 
-        public void Initialize(AndroidPublisherService service, Config config, string[] args)
+        /// <summary>
+        /// Google APIs the command talks to. Only requested services are created,
+        /// so a command never asks the user to grant scopes it does not need.
+        /// </summary>
+        public virtual bool NeedsAndroidPublisher => true;
+        public virtual bool NeedsPlayDeveloperReporting => false;
+
+        public virtual string[] RequiredScopes
+        {
+            get
+            {
+                var scopes = new List<string>();
+                if (NeedsAndroidPublisher)
+                    scopes.Add(AndroidPublisherService.Scope.Androidpublisher);
+                if (NeedsPlayDeveloperReporting)
+                    scopes.Add(PlaydeveloperreportingService.Scope.Playdeveloperreporting);
+                return [.. scopes];
+            }
+        }
+
+        /// <summary>
+        /// Key of the cached OAuth token. Commands with different scope sets use different keys,
+        /// otherwise they would invalidate each other's tokens on every run.
+        /// </summary>
+        public virtual string AuthUserKey => "user";
+
+        public void Initialize(AndroidPublisherService? service, PlaydeveloperreportingService? reportingService, Config config, string[] args)
         {
             Args = args;
             Service = service;
+            ReportingService = reportingService;
             Config = config;
         }
 
@@ -24,4 +53,3 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         public abstract void PrintHelp();
     }
 }
-

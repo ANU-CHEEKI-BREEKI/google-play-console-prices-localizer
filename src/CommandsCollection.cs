@@ -74,6 +74,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "--iap <iap-id>",
                 "Specify the ID of a specific In-App Purchase to run command for."
             );
+            CommandLinesUtils.PrintOption(
+                "--out <path>",
+                "Specify the directory the 'vitals' command writes its reports into. Default is './vitals-export' next to the global config json."
+            );
 
             Console.WriteLine();
             Console.WriteLine();

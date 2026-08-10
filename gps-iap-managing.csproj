@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="Google.Apis.AndroidPublisher.v3" Version="1.73.0.4022" />
+    <PackageReference Include="Google.Apis.Playdeveloperreporting.v1beta1" Version="1.75.0.4207" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
