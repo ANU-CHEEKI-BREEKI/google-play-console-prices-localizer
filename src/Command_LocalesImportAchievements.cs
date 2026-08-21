@@ -47,6 +47,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 }
 
                 Console.WriteLine($"read {csv.Rows.Count} key(s) in {csv.Locales.Count} language(s) from {Path.GetFullPath(path)}");
+
+                if (!NamesAreUnique(csv))
+                    return;
+
                 Console.WriteLine("receiving achievements...");
 
                 var changes = await BuildChanges(csv, [], verbose);
@@ -128,6 +132,43 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 Console.WriteLine("if this is a 400 about a locale, that language is not in the games project yet:");
                 Console.WriteLine("Play Games Services -> Setup and management -> Configuration -> Edit properties -> Manage translations");
             }
+        }
+
+        /// <summary>
+        /// Achievement names have to be unique per locale, and Google accepts a clashing one, then
+        /// blocks publishing with "there is a problem with your achievement" and never says what.
+        /// Translators collapse near synonyms all the time - Deadeye and Sharpshooter both become
+        /// Scharfschütze - so this is caught here rather than in the console days later.
+        /// </summary>
+        static bool NamesAreUnique(TranslationsCsv csv)
+        {
+            var names = csv.Rows.Where(r => r.Field == NameField).ToList();
+            var clashes = new List<string>();
+
+            foreach (var locale in csv.Locales)
+            {
+                var byName = names
+                    .Where(r => r.Values.ContainsKey(locale.Locale))
+                    .GroupBy(r => r.Values[locale.Locale].Trim(), StringComparer.OrdinalIgnoreCase)
+                    .Where(g => g.Count() > 1);
+
+                foreach (var group in byName)
+                    clashes.Add($"        [{locale.Column}] \"{group.Key}\" is used by {string.Join(" and ", group.Select(r => r.Id))}");
+            }
+
+            if (clashes.Count == 0)
+                return true;
+
+            Console.WriteLine();
+            Console.WriteLine($"[ERROR] {clashes.Count} achievement name(s) are not unique within their language.");
+            Console.WriteLine("        Google takes them, then refuses to publish and does not say why. Nothing was sent.");
+            Console.WriteLine();
+            foreach (var clash in clashes)
+                Console.WriteLine(clash);
+            Console.WriteLine();
+            Console.WriteLine("        Give each of them its own wording in the csv and run again.");
+
+            return false;
         }
 
         record Changes(List<GamesConfig.Data.AchievementConfiguration> Changed, int Unchanged, int Unknown);
