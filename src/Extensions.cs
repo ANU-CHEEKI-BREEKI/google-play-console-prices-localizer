@@ -244,52 +244,69 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         }
 
         /// <summary>
-        /// Sends price updates the way Google recommends for bulk changes: every product in one
-        /// batchUpdate, LATENCY_TOLERANT. Measured on this API: a single latency-sensitive patch
-        /// with the full region list does not answer within five minutes, the tolerant batch with
-        /// the same payload answers in about two. The price is that the change can take up to
-        /// 24 hours to reach devices; pass sensitive=true to use the slow path when that matters.
+        /// Sends price updates, one request per product, several at a time.
+        /// Measured on this API: Google needs about two minutes per product no matter how it is
+        /// sent, and products in one batch request are processed one after another, so a batch
+        /// of two does not answer within five minutes. Separate requests in parallel are the only
+        /// way the wall clock does not grow with the number of products.
+        /// LATENCY_TOLERANT by default: the change can take up to 24 hours to reach devices,
+        /// pass sensitive=true when that matters.
         /// </summary>
-        public static async Task<bool> SendWithRetryAsync(this IList<OneTimeProduct> products, AndroidPublisherService service, string package, bool sensitive = false)
+        public static async Task<bool> SendWithRetryAsync(this IList<OneTimeProduct> products, AndroidPublisherService service, string package, bool sensitive = false, int parallel = 8)
         {
             if (products.Count == 0)
                 return true;
 
-            var requests = products.Select(product => new UpdateOneTimeProductRequest
+            Console.WriteLine($"   -> Sending {products.Count} product(s), {Math.Min(parallel, products.Count)} at a time ({(sensitive ? "latency sensitive" : "latency tolerant")})...");
+            Console.WriteLine("      Google takes about two minutes per product, this is normal.");
+
+            var watch = Stopwatch.StartNew();
+            var gate = new SemaphoreSlim(parallel);
+            var done = 0;
+
+            var tasks = products.Select(async product =>
             {
-                OneTimeProduct = product,
-                UpdateMask = "purchaseOptions",
-                RegionsVersion = product.RegionsVersion,
-                LatencyTolerance = sensitive ? null : LatencyTolerant,
-            }).ToList();
-
-            var allOk = true;
-            var batches = requests.Chunk(100).ToList();
-
-            for (var i = 0; i < batches.Count; i++)
-            {
-                var batch = batches[i];
-                var label = batches.Count == 1 ? $"{batch.Length} product(s)" : $"batch {i + 1}/{batches.Count} ({batch.Length} product(s))";
-
-                Console.WriteLine($"   -> Sending {label} in one request ({(sensitive ? "latency sensitive" : "latency tolerant")})...");
-                if (!sensitive)
-                    Console.WriteLine("      Google takes about two minutes to write a full region list, this is normal.");
-
-                var body = new BatchUpdateOneTimeProductsRequest { Requests = batch };
-
-                var ok = await ExecuteWithRetryAsync(
-                    () => Timed("the update request", async () =>
+                await gate.WaitAsync();
+                try
+                {
+                    var ok = await ExecuteWithRetryAsync(async () =>
                     {
                         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-                        await service.Monetization.Onetimeproducts.BatchUpdate(body, package).ExecuteAsync(timeout.Token);
-                    }),
-                    label
-                );
 
-                allOk &= ok;
+                        var patch = service.Monetization.Onetimeproducts.Patch(product, package, product.ProductId);
+                        patch.RegionsVersionVersion = product.RegionsVersion.Version;
+                        patch.UpdateMask = "purchaseOptions";
+                        if (!sensitive)
+                            patch.LatencyTolerance = MonetizationResource.OnetimeproductsResource.PatchRequest.LatencyToleranceEnum.PRODUCTUPDATELATENCYTOLERANCELATENCYTOLERANT;
+
+                        await patch.ExecuteAsync(timeout.Token);
+                    }, product.ProductId);
+
+                    var n = Interlocked.Increment(ref done);
+                    Console.WriteLine($"      {(ok ? "updated" : "FAILED ")} {product.ProductId}  ({n}/{products.Count}, {watch.Elapsed.TotalSeconds:0}s)");
+                    return ok;
+                }
+                finally
+                {
+                    gate.Release();
+                }
+            }).ToList();
+
+            var heartbeat = Heartbeat(watch, () => $"{done}/{products.Count} done", tasks);
+            var results = await Task.WhenAll(tasks);
+            await heartbeat;
+
+            return results.All(r => r);
+        }
+
+        private static async Task Heartbeat(Stopwatch watch, Func<string> status, List<Task<bool>> tasks)
+        {
+            while (!tasks.All(t => t.IsCompleted))
+            {
+                await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(15)), Task.WhenAll(tasks));
+                if (!tasks.All(t => t.IsCompleted))
+                    Console.WriteLine($"      still waiting... {watch.Elapsed.TotalSeconds:0}s, {status()}");
             }
-
-            return allOk;
         }
 
         /// <summary>

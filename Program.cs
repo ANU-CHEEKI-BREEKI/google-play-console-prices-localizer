@@ -129,9 +129,10 @@ using var reportingService = command.NeedsPlayDeveloperReporting
     ? new PlaydeveloperreportingService(initializer)
     : null;
 
-// set larger timeout
+// set larger timeout: a price write takes Google about two minutes per product,
+// the per-request cancellation tokens in the commands are the real limit
 if (service is not null)
-    service.HttpClient.Timeout = TimeSpan.FromMinutes(5);
+    service.HttpClient.Timeout = TimeSpan.FromMinutes(15);
 if (reportingService is not null)
     reportingService.HttpClient.Timeout = TimeSpan.FromMinutes(5);
 
