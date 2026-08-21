@@ -36,7 +36,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 Console.WriteLine("receiving IAP list...");
 
                 var products = (await Service!.Monetization.Onetimeproducts.ListAllAsync(Package))
-                    .Filter(Config.Iap)
+                    .Filter(IapFilter)
                     .ToList();
 
                 if (products.Count == 0)
@@ -142,7 +142,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("export-iaps [--products <path-to-product-definitions.csv>] [--language <code>] [--iap <iap-id>] [-v]");
+            Console.WriteLine("export-iaps [--products <path-to-product-definitions.csv>] [--language <code>] [--iap <id[,id...]>] [-v]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -165,13 +165,15 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "Language of the exported store listing. Default is en-US, or the language specified in global config.json."
             );
             CommandLinesUtils.PrintOption(
-                "--iap <iap-id>",
-                "Export only this single In-App Purchase."
+                CommandLinesUtils.IapOptionName,
+                CommandLinesUtils.IapOptionDescription
             );
             CommandLinesUtils.PrintOption(
                 "-v",
                 "Include additional verbose output"
             );
+
+            CommandLinesUtils.PrintCommonOptions();
         }
     }
 }

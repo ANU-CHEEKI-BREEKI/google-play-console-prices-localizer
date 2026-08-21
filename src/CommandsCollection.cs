@@ -36,6 +36,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "[command-options]",
                 "Command-specific options"
             );
+            CommandLinesUtils.PrintOption(
+                CommandLinesUtils.IapOptionName,
+                CommandLinesUtils.IapOptionDescription + " Works with every command that touches products."
+            );
 
             CommandLinesUtils.PrintOption(
                 "--config <path>",
@@ -69,10 +73,6 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintOption(
                 "--currency <currency>",
                 "Specify the base currency from which to convert prices. Default is USD, or currency specified in global config.json"
-            );
-            CommandLinesUtils.PrintOption(
-                "--iap <iap-id>",
-                "Specify the ID of a specific In-App Purchase to run command for."
             );
             CommandLinesUtils.PrintOption(
                 "--products <path>",

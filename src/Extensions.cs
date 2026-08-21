@@ -32,8 +32,21 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         public static string FormattedPrice(this Price price)
             => $"{decimal.Parse(price.PriceMicros) / 1_000_000} {price.Currency}";
 
+        /// <summary>
+        /// keeps only the products named in the --iap option, a comma separated list of ids.
+        /// empty means everything
+        /// </summary>
         public static IEnumerable<OneTimeProduct> Filter(this IEnumerable<OneTimeProduct> products, string filterIAP)
-            => products.Where(p => string.IsNullOrEmpty(filterIAP) || p.ProductId == filterIAP);
+        {
+            var ids = ParseIapFilter(filterIAP);
+            return ids.Count == 0 ? products : products.Where(p => ids.Contains(p.ProductId));
+        }
+
+        public static HashSet<string> ParseIapFilter(string filterIAP)
+            => new(
+                (filterIAP ?? "").Split([',', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                StringComparer.Ordinal
+            );
 
         public static void PrintIapList(this IEnumerable<OneTimeProduct> products, bool printLocalPrices, string? defaultRegion = null)
         {

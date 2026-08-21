@@ -242,6 +242,28 @@ public static class CommandLinesUtils
         return args[pathIndex + 1];
     }
 
+    public const string IapOptionUsage = "[--iap <id[,id...]>]";
+    public const string IapOptionName = "--iap <id[,id...]>";
+    public const string IapOptionDescription = "Run only for these In-App Purchases, a comma separated list of product ids. Default is every product.";
+
+    /// <summary>
+    /// the options every command accepts on top of its own. Printed at the bottom of each
+    /// command's help, so nobody has to guess that --config or --iap exist
+    /// </summary>
+    public static void PrintCommonOptions()
+    {
+        Console.WriteLine();
+        Console.WriteLine("common options (accepted by every command):");
+        PrintOption("--config <path>", "Path to the global config json, or to the folder that contains it. Default is '../config.json'.");
+        PrintOption("--package <package>", "App package name. Overrides the global config.");
+        PrintOption("--credentials <path>", "Path to the OAuth client credentials json. Overrides the global config.");
+        PrintOption("--region <region>", "Region whose price is shown as the default one. Default is US, or the region from the global config.");
+        PrintOption("--currency <currency>", "Currency the default prices are in. Default is USD, or the currency from the global config.");
+        PrintOption("--language <code>", "Language of the store listing. Default is en-US, or the language from the global config.");
+        Console.WriteLine();
+        PrintDescription("Run the tool without arguments to see the full list of config options.", 2);
+    }
+
     public static void PrintDescription(string description, int indent = 8)
     {
         const int totalWidth = 80;

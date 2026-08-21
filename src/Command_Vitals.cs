@@ -896,6 +896,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintDescription("vitals --days 56 --sets all --by all --top 25", 4);
             CommandLinesUtils.PrintDescription("vitals --period HOURLY --days 3 --sets crash,anr", 4);
             CommandLinesUtils.PrintDescription("vitals --filter 'versionCode = 1234' --issues 50", 4);
+
+            CommandLinesUtils.PrintCommonOptions();
         }
     }
 }

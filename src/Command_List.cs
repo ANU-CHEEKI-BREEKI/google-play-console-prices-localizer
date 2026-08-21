@@ -19,7 +19,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     Console.WriteLine("current IAP");
 
                 listResponse.OneTimeProducts
-                    .Filter(Config.Iap)
+                    .Filter(IapFilter)
                     .PrintIapList(printPrices, defaultRegion: Config.DefaultRegion);
             }
             catch (Exception ex)
@@ -33,7 +33,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("list [-l] [-v]");
+            Console.WriteLine("list [--iap <id[,id...]>] [-l] [-v]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -43,6 +43,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             Console.WriteLine();
             Console.WriteLine("options:");
             CommandLinesUtils.PrintOption(
+                CommandLinesUtils.IapOptionName,
+                CommandLinesUtils.IapOptionDescription
+            );
+            CommandLinesUtils.PrintOption(
                 "-l",
                 "Include local pricing for all regions"
             );
@@ -50,6 +54,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "-v",
                 "Include detailed verbose output"
             );
+
+            CommandLinesUtils.PrintCommonOptions();
         }
     }
 }

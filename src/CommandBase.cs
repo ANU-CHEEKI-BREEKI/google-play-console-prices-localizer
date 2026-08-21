@@ -12,6 +12,13 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public string Package => Config.PackageName;
 
+        /// <summary>
+        /// product ids from the --iap option, empty means every product.
+        /// A run time filter, deliberately not part of the config: nobody wants a
+        /// config that permanently narrows the app down to one product
+        /// </summary>
+        public string IapFilter => Args.TryGetOption("--iap", "");
+
         public abstract string Name { get; }
         public abstract string Description { get; }
 

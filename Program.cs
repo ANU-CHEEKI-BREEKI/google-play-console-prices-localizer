@@ -75,7 +75,6 @@ config.RoundPricesForFilePath = args.TryGetOption("--round-prices", config.Round
 
 config.DefaultRegion = args.TryGetOption("--region", config.DefaultRegion);
 config.DefaultCurrency = args.TryGetOption("--currency", config.DefaultCurrency);
-config.Iap = args.TryGetOption("--iap", config.Iap);
 config.ProductDefinitionsFilePath = args.TryGetOption("--products", config.ProductDefinitionsFilePath);
 config.DefaultLanguageCode = args.TryGetOption("--language", config.DefaultLanguageCode);
 config.VitalsOutputPath = args.TryGetOption("--out", config.VitalsOutputPath);

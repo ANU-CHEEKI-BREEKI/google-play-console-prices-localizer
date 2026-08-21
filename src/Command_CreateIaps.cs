@@ -55,8 +55,9 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 if (definitions is null)
                     return;
 
-                if (!string.IsNullOrEmpty(Config.Iap))
-                    definitions = definitions.Where(d => d.ProductId == Config.Iap).ToList();
+                var onlyIds = Extensions.ParseIapFilter(IapFilter);
+                if (onlyIds.Count > 0)
+                    definitions = definitions.Where(d => onlyIds.Contains(d.ProductId)).ToList();
 
                 if (definitions.Count == 0)
                 {
@@ -521,7 +522,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("create-iaps [--products <path-to-product-definitions.csv>] [--language <code>] [--iap <iap-id>] [-n|--dry-run] [-v]");
+            Console.WriteLine("create-iaps [--products <path-to-product-definitions.csv>] [--language <code>] [--iap <id[,id...]>] [-n|--dry-run] [-v]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -545,8 +546,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "Language of the created store listing. Default is en-US, or the language specified in global config.json."
             );
             CommandLinesUtils.PrintOption(
-                "--iap <iap-id>",
-                "Create only this single In-App Purchase out of the csv."
+                CommandLinesUtils.IapOptionName,
+                CommandLinesUtils.IapOptionDescription
             );
             CommandLinesUtils.PrintOption(
                 "-n, --dry-run",
@@ -556,6 +557,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "-v",
                 "Include additional verbose output"
             );
+
+            CommandLinesUtils.PrintCommonOptions();
         }
     }
 }

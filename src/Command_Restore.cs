@@ -25,7 +25,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 var listRequest = Service.Monetization.Onetimeproducts.List(Package);
                 var listResponse = await listRequest.ExecuteAsync();
 
-                var products = listResponse.OneTimeProducts.Filter(Config.Iap).ToList();
+                var products = listResponse.OneTimeProducts.Filter(IapFilter).ToList();
 
                 if (verbose)
                 {
@@ -127,7 +127,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     var updatedListResponse = await updatedListRequest.ExecuteAsync();
                     updatedListResponse
                         .OneTimeProducts
-                        .Filter(Config.Iap)
+                        .Filter(IapFilter)
                         .PrintIapList(printLocalPrices, Config.DefaultRegion);
                 }
             }
@@ -142,7 +142,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("restore [--prices <path-to-default-prices.json>] [-v] [-l]");
+            Console.WriteLine("restore [--prices <path-to-default-prices.json>] [--iap <id[,id...]>] [-v] [-l]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -153,6 +153,14 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             Console.WriteLine("options:");
 
             CommandLinesUtils.PrintOption(
+                "--prices <path>",
+                "Specifies path to json with default prices in default currency. If not specified, used path from global config json."
+            );
+            CommandLinesUtils.PrintOption(
+                CommandLinesUtils.IapOptionName,
+                CommandLinesUtils.IapOptionDescription
+            );
+            CommandLinesUtils.PrintOption(
                 "-v",
                 "Include additional verbose output"
             );
@@ -160,6 +168,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "-l",
                 "Include local pricing for all regions"
             );
+
+            CommandLinesUtils.PrintCommonOptions();
         }
     }
 }

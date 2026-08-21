@@ -110,6 +110,12 @@ Then download the **`Client secrets`** of the created OAuth desktop client. This
 `restore [-v] [-l]`
     To reset all local prices to the default prices. `-v` To see IAPs lists during restoring, `-l` to also see local prices
 
+`--iap <id[,id...]>`
+    Works with every command that touches products: run it only for these product ids, comma separated.
+    Handy right after `create-iaps`, so `localize` does not re-send the whole catalog:
+
+        dotnet run -- localize --iap pack_new_one,pack_new_two
+
 ---
 
 ### Creating new IAPs from a csv
