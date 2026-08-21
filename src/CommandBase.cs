@@ -1,4 +1,5 @@
 using Google.Apis.AndroidPublisher.v3;
+using Google.Apis.GamesConfiguration.v1configuration;
 using Google.Apis.Playdeveloperreporting.v1beta1;
 
 namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
@@ -7,10 +8,14 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
     {
         public AndroidPublisherService? Service { get; set; }
         public PlaydeveloperreportingService? ReportingService { get; set; }
+        public GamesConfigurationService? GamesService { get; set; }
         public Config Config { get; private set; } = null!;
         public string[] Args { get; set; } = null!;
 
         public string Package => Config.PackageName;
+
+        /// <summary>Play Games Services project id, the games configuration API's equivalent of the package name</summary>
+        public string GamesProjectId => Config.GamesProjectId;
 
         /// <summary>
         /// product ids from the --iap option, empty means every product.
@@ -34,13 +39,16 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public virtual bool NeedsAndroidPublisher => true;
         public virtual bool NeedsPlayDeveloperReporting => false;
+        public virtual bool NeedsGamesConfiguration => false;
 
         public virtual string[] RequiredScopes
         {
             get
             {
                 var scopes = new List<string>();
-                if (NeedsAndroidPublisher)
+                // the games configuration API is authorized by the very same scope as the publisher one,
+                // so a command that needs both still asks the user for a single grant
+                if (NeedsAndroidPublisher || NeedsGamesConfiguration)
                     scopes.Add(AndroidPublisherService.Scope.Androidpublisher);
                 if (NeedsPlayDeveloperReporting)
                     scopes.Add(PlaydeveloperreportingService.Scope.Playdeveloperreporting);
@@ -54,11 +62,18 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         /// </summary>
         public virtual string AuthUserKey => "user";
 
-        public void Initialize(AndroidPublisherService? service, PlaydeveloperreportingService? reportingService, Config config, string[] args)
+        public void Initialize(
+            AndroidPublisherService? service,
+            PlaydeveloperreportingService? reportingService,
+            GamesConfigurationService? gamesService,
+            Config config,
+            string[] args
+        )
         {
             Args = args;
             Service = service;
             ReportingService = reportingService;
+            GamesService = gamesService;
             Config = config;
         }
 

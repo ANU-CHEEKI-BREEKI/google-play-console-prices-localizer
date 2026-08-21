@@ -1,5 +1,6 @@
-﻿using Google.Apis.AndroidPublisher.v3;
+using Google.Apis.AndroidPublisher.v3;
 using Google.Apis.Auth.OAuth2;
+using Google.Apis.GamesConfiguration.v1configuration;
 using Google.Apis.Playdeveloperreporting.v1beta1;
 using ANU.APIs.GoogleDeveloperAPI.IAPManaging;
 using static Google.Apis.Services.BaseClientService;
@@ -13,6 +14,7 @@ var commands = new CommandsCollection()
     new Command_Restore(),
     new Command_LocalizePrices(),
     new Command_Vitals(),
+    new Command_Locales(),
     new Command_Config(),
 };
 
@@ -41,7 +43,7 @@ var verbose = args.HasFlag("-v");
 
 if (!command.NeedsConfig)
 {
-    command.Initialize(null, null, new Config(), args);
+    command.Initialize(null, null, null, new Config(), args);
     await command.ExecuteAsync();
     return;
 }
@@ -105,6 +107,7 @@ config.DefaultRegion = args.TryGetOption("--region", config.DefaultRegion);
 config.DefaultCurrency = args.TryGetOption("--currency", config.DefaultCurrency);
 config.ProductDefinitionsFilePath = args.TryGetOption("--products", config.ProductDefinitionsFilePath);
 config.DefaultLanguageCode = args.TryGetOption("--language", config.DefaultLanguageCode);
+config.GamesProjectId = args.TryGetOption("--games-project", config.GamesProjectId);
 config.VitalsOutputPath = args.TryGetOption("--out", config.VitalsOutputPath);
 
 
@@ -129,6 +132,10 @@ using var reportingService = command.NeedsPlayDeveloperReporting
     ? new PlaydeveloperreportingService(initializer)
     : null;
 
+using var gamesService = command.NeedsGamesConfiguration
+    ? new GamesConfigurationService(initializer)
+    : null;
+
 // set larger timeout: a price write takes Google about two minutes per product,
 // the per-request cancellation tokens in the commands are the real limit
 if (service is not null)
@@ -138,7 +145,7 @@ if (reportingService is not null)
 
 Console.WriteLine();
 
-command.Initialize(service, reportingService, config, args);
+command.Initialize(service, reportingService, gamesService, config, args);
 await command.ExecuteAsync();
 
 Console.WriteLine();

@@ -243,6 +243,72 @@ Your Play Console account needs at least the *"View app information (read-only)"
 
 ---
 
+### Which languages do I already have?
+
+    dotnet run locales
+
+Google keeps **three independent language lists** for one game, and nothing keeps them in sync:
+
+- the **store listing** - the page users see in Play
+- **Play Games Services** - achievement and leaderboard translations
+- the **one-time products** - the title and description in the purchase sheet
+
+They drift apart in ways the console never shows you. A real example from one game:
+
+    store listing:
+            en-US      default  Titan Soul: Action RPG Offline
+            es-419
+            pt-BR
+            ru-RU
+            uk
+
+    play games services:
+            en-US               42 achievements, 3 leaderboards
+            es-ES               42 achievements, 3 leaderboards
+            pt-PT               42 achievements, 3 leaderboards
+            uk                  42 achievements, 3 leaderboards
+
+    one-time products:
+            en-US               12 of 12 products
+
+    not everywhere (store listing, play games services, one-time products):
+            es-419     missing from: play games services, one-time products
+            es-ES      missing from: store listing, one-time products
+            pt-BR      missing from: play games services, one-time products
+            pt-PT      missing from: store listing, one-time products
+            ru-RU      missing from: play games services, one-time products
+            uk         missing from: one-time products
+
+Spanish is `es-419` on the page but `es-ES` in the achievements. Portuguese is `pt-BR` against `pt-PT`.
+Russian exists on the page and nowhere else. None of that is visible from any single console screen.
+
+The command is **read only**. It creates a draft edit to read the store listing and throws it away again,
+and it never writes anything anywhere.
+
+**There is no `locales add`, on purpose.** For the store listing and the products a language exists
+*because* a listing for it exists, so adding a locale and writing its text are the same operation -
+nothing to add on its own. Play Games Services is the opposite problem: its languages live in the game
+details, and the configuration API has no resource for them at all. Add those by hand, once:
+
+> Play Games Services -> Setup and management -> **Configuration** -> Edit properties -> Manage translations
+
+To read the games list, the tool needs your Play Games Services **project id** - the number the console
+shows next to the game name. Put it in `config.json`:
+
+    {
+        "PackageName": "com.MyApp.Package",
+        "GamesProjectId": "864662054415"
+    }
+
+or pass `--games-project 864662054415`. Without it the games section is skipped and the other two still print.
+
+You also need to enable **`Google Play Game Services Publishing API`** in your
+[Google Cloud Console](https://console.cloud.google.com/apis/library/gamesconfiguration.googleapis.com)
+for the same project your OAuth client belongs to. No new consent though - that API is authorized by the
+same `androidpublisher` scope the IAP commands already use.
+
+---
+
 ### Examples
 
 1. You cloned the repository and built the program.

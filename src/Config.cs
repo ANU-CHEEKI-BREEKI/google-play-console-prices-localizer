@@ -16,6 +16,13 @@ public class Config
 
     /// <summary>language of the store listing the 'export-iaps' and 'create-iaps' commands read and write</summary>
     public string DefaultLanguageCode { get; set; } = "en-US";
+
+    /// <summary>
+    /// numeric id of the Play Games Services project, the one the console shows next to the game name
+    /// as "Project ID". Not the package name: one games project can be shared by several apps,
+    /// and the games configuration API addresses games by this id only
+    /// </summary>
+    public string GamesProjectId { get; set; } = "";
     
     public string DefaultRegion { get; set; } = "US";
     public string DefaultCurrency { get; set; } = "USD";
