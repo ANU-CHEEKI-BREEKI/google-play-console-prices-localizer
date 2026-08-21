@@ -256,6 +256,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 }
 
                 Console.WriteLine($"   Google refuses '{bad}': not a locale code Play Games Services knows");
+                unknownCodes.Add(bad);
                 refused.Add(bad);
                 alive.RemoveAll(l => string.Equals(l, bad, StringComparison.OrdinalIgnoreCase));
             }
@@ -308,7 +309,13 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             return withDefault;
         }
 
-        /// <summary>sends the canary carrying exactly these locales. null means Google took it</summary>
+        /// <summary>
+        /// Sends the canary carrying exactly these locales. null means Google took it.
+        ///
+        /// An achievement carries a token that every accepted write invalidates, and the search here
+        /// writes on purpose - so a stale token is expected rather than exceptional, and costs one
+        /// extra read to fix
+        /// </summary>
         async Task<Google.GoogleApiException?> Send(
             GamesConfig.Data.AchievementConfiguration canary,
             Snapshotted snapshot,
@@ -317,19 +324,31 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         {
             snapshot.ApplyTo(canary.Draft, locales);
 
-            try
+            for (int attempt = 0; attempt < 2; attempt++)
             {
-                await GamesService!.AchievementConfigurations.Update(canary, canary.Id).ExecuteAsync();
-                return null;
+                try
+                {
+                    await GamesService!.AchievementConfigurations.Update(canary, canary.Id).ExecuteAsync();
+                    return null;
+                }
+                catch (Google.GoogleApiException ex)
+                {
+                    if (attempt > 0 || !IsStaleToken(ex.Message))
+                        return ex;
+
+                    var fresh = await GamesService!.AchievementConfigurations.Get(canary.Id).ExecuteAsync();
+                    canary.Token = fresh.Token;
+                }
             }
-            catch (Google.GoogleApiException ex)
-            {
-                return ex;
-            }
+
+            return null;
         }
 
         static bool IsInvalidLocaleCode(string message)
             => message.Contains("invalid locale code", StringComparison.OrdinalIgnoreCase);
+
+        static bool IsStaleToken(string message)
+            => message.Contains("token is too old", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// the canary's translations as they came out of the csv merge, so a probe can put back any
@@ -394,14 +413,36 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             }
         }
 
-        static void PrintRefusedHelp(List<string> refused)
+        /// <summary>
+        /// The two refusals need two different answers, so they are never printed as one list:
+        /// a language that is only missing from the games project is one checkbox away, while an
+        /// unknown code will never work and only belongs out of the csv.
+        /// </summary>
+        void PrintRefusedHelp(List<string> refused)
         {
-            Console.WriteLine();
-            Console.WriteLine($"these {refused.Count} language(s) were NOT imported: {string.Join(", ", refused)}");
-            Console.WriteLine("Google knows the codes, they are just not turned on for this games project yet. Add them once:");
-            Console.WriteLine("        Play Games Services -> Setup and management -> Configuration -> Edit properties -> Manage translations");
-            Console.WriteLine("then run this command again - everything already imported is skipped as up to date.");
+            var unknown = refused.Where(unknownCodes.Contains).ToList();
+            var missing = refused.Where(l => !unknownCodes.Contains(l)).ToList();
+
+            if (missing.Count > 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"{missing.Count} language(s) are not turned on for this games project: {string.Join(", ", missing)}");
+                Console.WriteLine("Google knows the codes, they are just not enabled here. Add them once:");
+                Console.WriteLine("        Play Games Services -> Setup and management -> Configuration -> Edit properties -> Manage translations");
+                Console.WriteLine("then run this command again - everything already imported is skipped as up to date.");
+            }
+
+            if (unknown.Count > 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"{unknown.Count} code(s) are not locales Play Games Services knows at all: {string.Join(", ", unknown)}");
+                Console.WriteLine("no console setting will ever accept these. Take them out of your locales json and out of the csv,");
+                Console.WriteLine("and check the spelling against the language picker under Manage translations.");
+            }
         }
+
+        /// <summary>codes Google called invalid outright, as opposed to merely not enabled</summary>
+        readonly HashSet<string> unknownCodes = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Puts the csv values into a bundle, and answers how many of them were actually a change.

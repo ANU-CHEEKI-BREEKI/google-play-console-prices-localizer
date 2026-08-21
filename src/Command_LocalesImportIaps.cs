@@ -97,6 +97,22 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                 Console.WriteLine();
 
+                // Google demands a regions version on any product write, even one that only touches
+                // text. Every listed product already carries the one it was last written with, so the
+                // exchange rate endpoint is only asked when none of them does
+                var regionsVersion = changed.Select(p => p.RegionsVersion?.Version).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))
+                    ?? products.Values.Select(p => p.RegionsVersion?.Version).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))
+                    ?? await CurrentRegionsVersion();
+
+                if (string.IsNullOrWhiteSpace(regionsVersion))
+                {
+                    Console.WriteLine("[ERROR] could not work out the regions version, and Google rejects a product write without one.");
+                    return;
+                }
+
+                if (verbose)
+                    Console.WriteLine($"regions version: {regionsVersion}");
+
                 var written = 0;
 
                 foreach (var product in changed)
@@ -105,6 +121,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     // product", and everything this command does not know about would be wiped
                     var request = Service.Monetization.Onetimeproducts.Patch(product, Package, product.ProductId);
                     request.UpdateMask = "listings";
+                    request.RegionsVersionVersion = regionsVersion;
                     // a listing change should show up fast, there is no region list to grind through
                     request.LatencyTolerance = MonetizationResource.OnetimeproductsResource
                         .PatchRequest.LatencyToleranceEnum.PRODUCTUPDATELATENCYTOLERANCELATENCYSENSITIVE;
@@ -129,6 +146,22 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             {
                 Console.WriteLine(ex);
             }
+        }
+
+        /// <summary>
+        /// The regions version Google is on right now. Read off the exchange rate endpoint, which is
+        /// the only place the api hands it out, and the price it is asked about does not matter
+        /// </summary>
+        async Task<string?> CurrentRegionsVersion()
+        {
+            var response = await Service!.Monetization
+                .ConvertRegionPrices(new ConvertRegionPricesRequest
+                {
+                    Price = new Money { CurrencyCode = "USD", Units = 1, Nanos = 0 }
+                }, Package)
+                .ExecuteAsync();
+
+            return response.RegionVersion?.Version;
         }
 
         /// <summary>
