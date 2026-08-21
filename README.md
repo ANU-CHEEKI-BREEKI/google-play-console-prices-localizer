@@ -321,20 +321,24 @@ achievement and one language at a time, which is why nobody ever finishes.
     exporting 73 achievement(s) in 4 language(s) into .../achievement-definitions.csv...
 
     written: .../achievement-definitions.csv
-    73 achievement(s), 4 language(s): en-US, es-ES, pt-PT, uk
+    146 key(s) from 73 achievement(s), 4 language(s): en-US, es-ES, pt-PT, uk
 
     filled in:
-            en-US        73 name(s),   73 description(s) of 73
-            es-ES         0 name(s),    0 description(s) of 73  <- empty, ready to translate
-            pt-PT         0 name(s),    0 description(s) of 73  <- empty, ready to translate
-            uk            0 name(s),    0 description(s) of 73  <- empty, ready to translate
+            en-US       146 of 146 key(s)
+            es-ES         0 of 146 key(s)  <- empty, ready to translate
+            pt-PT         0 of 146 key(s)  <- empty, ready to translate
+            uk            0 of 146 key(s)  <- empty, ready to translate
 
-The csv is one row per achievement, two columns per language:
+The csv is **one row per key, one column per language** - the layout every translation service reads:
 
-    achievement_id      name[en-US]     description[en-US]      name[uk]    description[uk]
-    CgkIj8z_...         Slayer of Fury  Defeat the Minotaur...
+    key                                 en-US                       es-ES   pt-PT   uk
+    CgkIj8z_jpUZEAIQAQ.name             Slayer of Fury
+    CgkIj8z_jpUZEAIQAQ.description      Defeat the Minotaur - ...
 
-Open it in a spreadsheet, fill the empty columns, done.
+Each achievement contributes two rows, `.name` and `.description`. Achievement ids are base64url tokens
+and never contain a dot, so the suffix needs no escaping.
+
+Open it in a spreadsheet or hand it to your translation service, fill the empty columns, done.
 
 Without `--languages` the columns are only the languages that already carry a translation. `--languages`
 is what gets you the empty columns to fill. Use the codes **Play Games Services** uses, not the ones from

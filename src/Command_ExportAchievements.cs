@@ -3,8 +3,8 @@ using GamesConfig = Google.Apis.GamesConfiguration.v1configuration;
 namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 {
     /// <summary>
-    /// Exports every achievement's name and description, one column pair per language, into a csv
-    /// meant to be handed to a translator and fed back by 'import-achievements'.
+    /// Exports every achievement's name and description into a csv laid out the way translation
+    /// tooling expects it: one row per key, one column per language.
     ///
     /// Google never machine translates achievements the way it does the store page, so a game that
     /// ships 70 of them in English ships 70 of them in English everywhere. The console can only be
@@ -13,7 +13,14 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
     /// </summary>
     public class Command_ExportAchievements : CommandBase
     {
-        const string IdHeader = "achievement_id";
+        const string KeyHeader = "key";
+
+        /// <summary>
+        /// key suffixes. Achievement ids are base64url tokens like CgkIj8z_jpUZEAIQAQ and never
+        /// contain a dot, so a dot separates the id from the field without any escaping
+        /// </summary>
+        const string NameSuffix = ".name";
+        const string DescriptionSuffix = ".description";
 
         public override bool NeedsAndroidPublisher => false;
         public override bool NeedsGamesConfiguration => true;
@@ -64,16 +71,14 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     return;
                 }
 
-                var headers = BuildHeaders(locales);
-
                 Console.WriteLine($"exporting {achievements.Count} achievement(s) in {locales.Count} language(s) into {Path.GetFullPath(path)}...");
-
-                var rows = new List<List<string>>();
 
                 // the console orders achievements by sort rank, keep the csv in the order the author sees
                 var ordered = achievements
                     .OrderBy(a => details[a]?.SortRank ?? int.MaxValue)
                     .ThenBy(a => a.Id, StringComparer.Ordinal);
+
+                var rows = new List<List<string>>();
 
                 foreach (var achievement in ordered)
                 {
@@ -81,35 +86,28 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                     if (detail is null)
                     {
-                        Console.WriteLine($"Warning: {achievement.Id} has neither a draft nor a published version, exported as an empty row.");
-                        rows.Add([achievement.Id ?? "", .. locales.SelectMany(_ => new[] { "", "" })]);
+                        Console.WriteLine($"Warning: {achievement.Id} has neither a draft nor a published version, skipped.");
                         continue;
                     }
 
-                    var row = new List<string> { achievement.Id ?? "" };
-
-                    foreach (var locale in locales)
-                    {
-                        row.Add(detail.Name.ValueFor(locale));
-                        row.Add(detail.Description.ValueFor(locale));
-                    }
+                    // name and description are two separate keys: a translation service wants one
+                    // string per row, and the two are translated independently anyway
+                    rows.Add(BuildRow(achievement.Id + NameSuffix, detail.Name, locales));
+                    rows.Add(BuildRow(achievement.Id + DescriptionSuffix, detail.Description, locales));
 
                     if (verbose)
-                    {
-                        var filled = locales.Count(l => !string.IsNullOrWhiteSpace(detail.Name.ValueFor(l)));
-                        Console.WriteLine($"   {achievement.Id}: \"{detail.Name.ValueFor(locales[0])}\", {filled} of {locales.Count} language(s)");
-                    }
-
-                    rows.Add(row);
+                        Console.WriteLine($"   {achievement.Id}: \"{detail.Name.ValueFor(locales[0])}\"");
                 }
+
+                List<string> headers = [KeyHeader, .. locales];
 
                 await CommandLinesUtils.SaveCsv(path, headers, rows);
 
                 Console.WriteLine();
                 Console.WriteLine($"written: {Path.GetFullPath(path)}");
-                Console.WriteLine($"{rows.Count} achievement(s), {locales.Count} language(s): {string.Join(", ", locales)}");
+                Console.WriteLine($"{rows.Count} key(s) from {rows.Count / 2} achievement(s), {locales.Count} language(s): {string.Join(", ", locales)}");
 
-                PrintCoverage(details.Values, locales);
+                PrintCoverage(rows, locales);
             }
             catch (Exception ex)
             {
@@ -119,9 +117,12 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             }
         }
 
+        static List<string> BuildRow(string key, GamesConfig.Data.LocalizedStringBundle? bundle, List<string> locales)
+            => [key, .. locales.Select(bundle.ValueFor)];
+
         /// <summary>
         /// The columns of the csv, in order: whatever is already translated, plus whatever --languages
-        /// asks for. A language that exists nowhere yet gets an empty column pair, which is the whole
+        /// asks for. A language that exists nowhere yet gets an empty column, which is the whole
         /// point - that empty column is what the translator fills in.
         /// </summary>
         List<string> ResolveLocales(IEnumerable<GamesConfig.Data.AchievementConfigurationDetail?> details)
@@ -135,17 +136,19 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             var requested = Extensions.ParseIapFilter(Args.TryGetOption("--languages", ""))
                 .OrderBy(l => l, StringComparer.Ordinal);
 
+            var all = found.Concat(requested).ToList();
             var locales = new List<string>();
 
-            // the default language leads, so the source text a translator works from is the first pair
+            // the default language leads, so the source text a translator works from is the first column
             var defaultLanguage = Config.DefaultLanguageCode;
-            if (!string.IsNullOrWhiteSpace(defaultLanguage)
-                && found.Concat(requested).Contains(defaultLanguage, StringComparer.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(defaultLanguage))
             {
-                locales.Add(found.Concat(requested).First(l => string.Equals(l, defaultLanguage, StringComparison.OrdinalIgnoreCase)));
+                var match = all.FirstOrDefault(l => string.Equals(l, defaultLanguage, StringComparison.OrdinalIgnoreCase));
+                if (match is not null)
+                    locales.Add(match);
             }
 
-            foreach (var locale in found.Concat(requested))
+            foreach (var locale in all)
             {
                 if (!locales.Contains(locale, StringComparer.OrdinalIgnoreCase))
                     locales.Add(locale);
@@ -154,44 +157,28 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             return locales;
         }
 
-        static List<string> BuildHeaders(List<string> locales)
-        {
-            var headers = new List<string> { IdHeader };
-
-            foreach (var locale in locales)
-            {
-                headers.Add($"name[{locale}]");
-                headers.Add($"description[{locale}]");
-            }
-
-            return headers;
-        }
-
         /// <summary>
         /// How much of each language is actually filled in. Without this the csv looks complete the
         /// moment it has columns, and a half translated language is exactly the thing worth seeing.
         /// </summary>
-        static void PrintCoverage(IEnumerable<GamesConfig.Data.AchievementConfigurationDetail?> details, List<string> locales)
+        static void PrintCoverage(List<List<string>> rows, List<string> locales)
         {
-            var all = details.ToList();
-
             Console.WriteLine();
             Console.WriteLine("filled in:");
 
-            foreach (var locale in locales)
+            for (int i = 0; i < locales.Count; i++)
             {
-                var names = all.Count(d => !string.IsNullOrWhiteSpace(d?.Name.ValueFor(locale)));
-                var descriptions = all.Count(d => !string.IsNullOrWhiteSpace(d?.Description.ValueFor(locale)));
-
-                var note = names == 0 && descriptions == 0 ? "  <- empty, ready to translate" : "";
-                Console.WriteLine($"        {locale,-10} {names,4} name(s), {descriptions,4} description(s) of {all.Count}{note}");
+                // +1 for the key column
+                var filled = rows.Count(r => !string.IsNullOrWhiteSpace(r[i + 1]));
+                var note = filled == 0 ? "  <- empty, ready to translate" : "";
+                Console.WriteLine($"        {locales[i],-10} {filled,4} of {rows.Count} key(s){note}");
             }
         }
 
         public override string Name => "export-achievements";
 
         public override string Description
-            => "Exports every Play Games Services achievement into a csv, one column pair per language, ready to be translated in a spreadsheet.";
+            => "Exports every Play Games Services achievement into a csv, one row per key and one column per language, ready to be fed to a translation service.";
 
         public override void PrintHelp()
         {
@@ -201,7 +188,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
             Console.WriteLine("description:");
             CommandLinesUtils.PrintDescription(Description);
-            CommandLinesUtils.PrintDescription($"Columns: {IdHeader}, then 'name[<locale>]' and 'description[<locale>]' for every language. Google never machine translates achievements the way it does the store page, so whatever is not in here is English for everyone.");
+            CommandLinesUtils.PrintDescription($"Columns: '{KeyHeader}', then one column per language. Every achievement contributes two rows, '<achievement_id>{NameSuffix}' and '<achievement_id>{DescriptionSuffix}', because a translation service wants one string per row.");
+            CommandLinesUtils.PrintDescription("Google never machine translates achievements the way it does the store page, so whatever is not in here is English for everyone.");
             CommandLinesUtils.PrintDescription("By default the columns are the languages that already carry a translation. Add the ones you want to translate into with --languages, they come out as empty columns to fill.");
             CommandLinesUtils.PrintDescription("Exported from the draft version, the one the console edits, falling back to the published one for an achievement never touched since it went live. Points, type, steps and icons are not exported and never change.");
             CommandLinesUtils.PrintDescription("Rows are in the console's own order, by sort rank. An existing csv at the target path is overwritten.");
