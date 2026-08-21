@@ -199,48 +199,65 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             => product.PurchaseOptions?.FirstOrDefault(po => po.BuyOption?.LegacyCompatible == true);
 
         /// <summary>
-        /// Activates purchase options, up to 100 per request, which is the API limit.
-        /// Returns false if any batch failed after the retries.
+        /// Activates purchase options. The batch endpoint only takes options of a single product
+        /// per request ("All nested requests must match the parent request product ID"), so this
+        /// is one request per product, several at a time, like the price updates.
         /// </summary>
-        public static async Task<bool> ActivateAsync(this AndroidPublisherService service, string package, IList<(string ProductId, string PurchaseOptionId)> options)
+        public static async Task<bool> ActivateAsync(this AndroidPublisherService service, string package, IList<(string ProductId, string PurchaseOptionId)> options, int parallel = 8)
         {
-            var allOk = true;
-            var batches = options.Chunk(100).ToList();
+            if (options.Count == 0)
+                return true;
 
-            for (var i = 0; i < batches.Count; i++)
+            var byProduct = options.GroupBy(o => o.ProductId).ToList();
+
+            Console.WriteLine($"   -> Activating {byProduct.Count} product(s), {Math.Min(parallel, byProduct.Count)} at a time...");
+
+            var watch = Stopwatch.StartNew();
+            var gate = new SemaphoreSlim(parallel);
+            var done = 0;
+
+            var tasks = byProduct.Select(async group =>
             {
-                var batch = batches[i];
-                var label = batches.Count == 1 ? $"{batch.Length} purchase option(s)" : $"batch {i + 1}/{batches.Count} ({batch.Length} purchase option(s))";
-
-                Console.WriteLine($"   -> Activating {label}...");
-
-                var body = new BatchUpdatePurchaseOptionStatesRequest
+                await gate.WaitAsync();
+                try
                 {
-                    Requests = batch.Select(o => new UpdatePurchaseOptionStateRequest
+                    var body = new BatchUpdatePurchaseOptionStatesRequest
                     {
-                        ActivatePurchaseOptionRequest = new ActivatePurchaseOptionRequest
+                        Requests = group.Select(o => new UpdatePurchaseOptionStateRequest
                         {
-                            PackageName = package,
-                            ProductId = o.ProductId,
-                            PurchaseOptionId = o.PurchaseOptionId,
-                            LatencyTolerance = LatencyTolerant,
-                        }
-                    }).ToList()
-                };
+                            ActivatePurchaseOptionRequest = new ActivatePurchaseOptionRequest
+                            {
+                                PackageName = package,
+                                ProductId = o.ProductId,
+                                PurchaseOptionId = o.PurchaseOptionId,
+                                LatencyTolerance = LatencyTolerant,
+                            }
+                        }).ToList()
+                    };
 
-                // the product id in the path is required but every request carries its own,
-                // so the first one of the batch is as good as any
-                var ok = await ExecuteWithRetryAsync(
-                    () => service.Monetization.Onetimeproducts.PurchaseOptions
-                        .BatchUpdateStates(body, package, batch[0].ProductId)
-                        .ExecuteAsync(),
-                    label
-                );
+                    var ok = await ExecuteWithRetryAsync(async () =>
+                    {
+                        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+                        await service.Monetization.Onetimeproducts.PurchaseOptions
+                            .BatchUpdateStates(body, package, group.Key)
+                            .ExecuteAsync(timeout.Token);
+                    }, group.Key);
 
-                allOk &= ok;
-            }
+                    var n = Interlocked.Increment(ref done);
+                    Console.WriteLine($"      {(ok ? "activated" : "FAILED   ")} {group.Key}  ({n}/{byProduct.Count}, {watch.Elapsed.TotalSeconds:0}s)");
+                    return ok;
+                }
+                finally
+                {
+                    gate.Release();
+                }
+            }).ToList();
 
-            return allOk;
+            var heartbeat = Heartbeat(watch, () => $"{done}/{byProduct.Count} done", tasks);
+            var results = await Task.WhenAll(tasks);
+            await heartbeat;
+
+            return results.All(r => r);
         }
 
         /// <summary>

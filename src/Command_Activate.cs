@@ -97,7 +97,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             Console.WriteLine("description:");
             CommandLinesUtils.PrintDescription(Description);
             CommandLinesUtils.PrintDescription("A freshly created product is a draft, nobody can buy it until its purchase option is activated. 'create-iaps' does this on its own, this command is for products created elsewhere, or for a create run whose activation failed.");
-            CommandLinesUtils.PrintDescription("All products go to Google in one request (100 per request at most, the API limit), with LATENCY_TOLERANT, so it counts as a single call against the hourly quota.");
+            CommandLinesUtils.PrintDescription("One request per product, several at a time, with LATENCY_TOLERANT.");
 
             Console.WriteLine();
             Console.WriteLine("options:");
