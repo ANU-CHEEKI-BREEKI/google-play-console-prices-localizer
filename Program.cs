@@ -94,6 +94,7 @@ config.LocalizedPricesTemplateFilePath = Path.Combine(configDirectory, config.Lo
 config.RoundPricesForFilePath = Path.Combine(configDirectory, config.RoundPricesForFilePath);
 config.ProductDefinitionsFilePath = Path.Combine(configDirectory, config.ProductDefinitionsFilePath);
 config.AchievementDefinitionsFilePath = Path.Combine(configDirectory, config.AchievementDefinitionsFilePath);
+config.LocalesFilePath = Path.Combine(configDirectory, config.LocalesFilePath);
 config.VitalsOutputPath = Path.Combine(configDirectory, config.VitalsOutputPath);
 
 
@@ -109,6 +110,7 @@ config.DefaultRegion = args.TryGetOption("--region", config.DefaultRegion);
 config.DefaultCurrency = args.TryGetOption("--currency", config.DefaultCurrency);
 config.ProductDefinitionsFilePath = args.TryGetOption("--products", config.ProductDefinitionsFilePath);
 config.AchievementDefinitionsFilePath = args.TryGetOption("--achievements", config.AchievementDefinitionsFilePath);
+config.LocalesFilePath = args.TryGetOption("--locales-file", config.LocalesFilePath);
 config.DefaultLanguageCode = args.TryGetOption("--language", config.DefaultLanguageCode);
 
 var sourceLocales = args.TryGetOption("--source-locales", "");

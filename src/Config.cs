@@ -35,11 +35,20 @@ public class Config
     public List<string> SourceLocales { get; set; } = [];
 
     /// <summary>
-    /// every locale the exports produce a column for, on top of whatever is already translated.
-    /// Play Games Services hides a language until something is actually translated into it - the api
-    /// has no resource for the language list at all - so a language added in the console and still
-    /// empty is invisible until it is named here. Empty means export only what is found
+    /// json file with every locale the exports produce a column for, a plain array of codes in the
+    /// order you want the columns.
+    /// It has to be maintained by hand: Play Games Services hides a language until something is
+    /// actually translated into it, and its api has no resource for the language list at all, so a
+    /// language added in the console and still empty cannot be discovered. A missing file is fine,
+    /// it just means only the locales already carrying a translation are exported
     /// </summary>
+    public string LocalesFilePath { get; set; } = "./locales.json";
+
+    /// <summary>
+    /// the --locales option, a one run override of whatever LocalesFilePath holds.
+    /// deliberately not read from config.json: the list belongs in its own file
+    /// </summary>
+    [Newtonsoft.Json.JsonIgnore]
     public List<string> Locales { get; set; } = [];
 
     /// <summary>
@@ -53,6 +62,17 @@ public class Config
     public string DefaultCurrency { get; set; } = "USD";
 
     public string VitalsOutputPath { get; set; } = "./vitals-export";
+}
+
+/// <summary>
+/// one exported language: the locale code Google wants, and the column name the csv carries it under.
+/// They are usually the same, and have to be separable when they are not - Play Games Services calls
+/// indonesian "id", which a translation service reads as an identifier column rather than a language,
+/// so the csv says "id-ID" while the api still gets "id"
+/// </summary>
+public record LocaleColumn(string Locale, string Column)
+{
+    public override string ToString() => Locale == Column ? Locale : $"{Locale} as {Column}";
 }
 
 public class ProductConfigs : Dictionary<string, decimal> { }

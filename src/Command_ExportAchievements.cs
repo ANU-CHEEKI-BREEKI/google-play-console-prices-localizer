@@ -1,3 +1,4 @@
+using Newtonsoft.Json.Linq;
 using GamesConfig = Google.Apis.GamesConfiguration.v1configuration;
 
 namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
@@ -63,11 +64,11 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     a => a.Draft ?? a.Published
                 );
 
-                var locales = ResolveLocales(details.Values);
+                var locales = await ResolveLocales(details.Values, verbose);
 
                 if (locales.Count == 0)
                 {
-                    Console.WriteLine("no translations at all, and no --languages given. nothing to put in the columns.");
+                    Console.WriteLine("no translations at all, and no locales configured. nothing to put in the columns.");
                     return;
                 }
 
@@ -96,10 +97,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     rows.Add(BuildRow(achievement.Id + DescriptionSuffix, detail.Description, locales));
 
                     if (verbose)
-                        Console.WriteLine($"   {achievement.Id}: \"{detail.Name.ValueFor(locales[0])}\"");
+                        Console.WriteLine($"   {achievement.Id}: \"{detail.Name.ValueFor(locales[0].Locale)}\"");
                 }
 
-                List<string> headers = [KeyHeader, .. locales];
+                List<string> headers = [KeyHeader, .. locales.Select(l => l.Column)];
 
                 await CommandLinesUtils.SaveCsv(path, headers, rows);
 
@@ -117,8 +118,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             }
         }
 
-        static List<string> BuildRow(string key, GamesConfig.Data.LocalizedStringBundle? bundle, List<string> locales)
-            => [key, .. locales.Select(bundle.ValueFor)];
+        static List<string> BuildRow(string key, GamesConfig.Data.LocalizedStringBundle? bundle, List<LocaleColumn> locales)
+            => [key, .. locales.Select(l => bundle.ValueFor(l.Locale))];
 
         /// <summary>
         /// The columns of the csv. Every locale the tool can see gets one - the source locales only
@@ -126,36 +127,41 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         ///
         /// Order: the source locales, in exactly the order they are configured, because a translation
         /// service reads the leading columns as its context and the order decides which one is the
-        /// primary source. Then everything already translated, then the configured extra locales,
-        /// then whatever --languages adds for this one run.
+        /// primary source. Then everything already translated, then the locales json, then whatever
+        /// --locales overrides it with for this one run.
         ///
-        /// The extra locales are not a nicety: Play Games Services hides a language until something is
+        /// The locales json is not a nicety: Play Games Services hides a language until something is
         /// translated into it, and the api exposes no language list at all, so a language added in the
-        /// console and still empty is invisible unless it is named.
+        /// console and still empty is invisible unless it is named in the file.
         /// </summary>
-        List<string> ResolveLocales(IEnumerable<GamesConfig.Data.AchievementConfigurationDetail?> details)
+        async Task<List<LocaleColumn>> ResolveLocales(IEnumerable<GamesConfig.Data.AchievementConfigurationDetail?> details, bool verbose)
         {
             var found = details
                 .SelectMany(d => d?.Name.Locales().Concat(d.Description.Locales()) ?? [])
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(l => l, StringComparer.Ordinal);
-
-            var requested = Extensions.ParseIapFilter(Args.TryGetOption("--languages", ""))
-                .OrderBy(l => l, StringComparer.Ordinal);
+                .OrderBy(l => l, StringComparer.Ordinal)
+                .Select(l => new LocaleColumn(l, l));
 
             // without a configured order the single default language leads, as it did before
-            var leading = Config.SourceLocales is { Count: > 0 }
-                ? Config.SourceLocales
-                : [Config.DefaultLanguageCode];
+            var leading = (Config.SourceLocales is { Count: > 0 }
+                    ? Config.SourceLocales
+                    : [Config.DefaultLanguageCode])
+                .Select(l => new LocaleColumn(l, l));
 
-            var locales = new List<string>();
+            var configured = Config.Locales is { Count: > 0 }
+                ? Config.Locales.Select(l => new LocaleColumn(l, l))
+                : await LoadLocalesFile(verbose);
 
-            foreach (var locale in leading.Concat(found).Concat(Config.Locales).Concat(requested))
+            var locales = new List<LocaleColumn>();
+
+            foreach (var locale in leading.Concat(found).Concat(configured))
             {
-                if (string.IsNullOrWhiteSpace(locale))
+                if (string.IsNullOrWhiteSpace(locale.Locale))
                     continue;
 
-                if (!locales.Contains(locale, StringComparer.OrdinalIgnoreCase))
+                // the first mention wins, so a locale named in the file keeps the column name from there
+                // only when nothing earlier already claimed it
+                if (!locales.Any(l => string.Equals(l.Locale, locale.Locale, StringComparison.OrdinalIgnoreCase)))
                     locales.Add(locale);
             }
 
@@ -163,10 +169,64 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         }
 
         /// <summary>
+        /// The locales json: a plain array of locale codes, in the order the columns should come out.
+        ///
+        /// An entry is normally just the code, which is both what Google wants and what the csv column
+        /// is called. When those two have to differ, the entry is a one property object instead -
+        /// { "id": "id-ID" } keeps sending "id" to the api while the csv says "id-ID", because a
+        /// translation service reads a column called "id" as an identifier rather than indonesian.
+        ///
+        /// A root level object works too, for a file that is all aliases. A missing file is not an
+        /// error, it just means nothing beyond what is already translated.
+        /// </summary>
+        async Task<List<LocaleColumn>> LoadLocalesFile(bool verbose)
+        {
+            var path = Config.LocalesFilePath;
+
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                if (verbose)
+                    Console.WriteLine($"no locales file at {Path.GetFullPath(path ?? "")}, exporting only what is already translated");
+                return [];
+            }
+
+            var parsed = JToken.Parse(await File.ReadAllTextAsync(path));
+
+            var locales = parsed switch
+            {
+                JArray array => [.. array.SelectMany(ReadEntry)],
+                JObject map => ReadProperties(map),
+                _ => new List<LocaleColumn>(),
+            };
+
+            if (verbose)
+                Console.WriteLine($"loaded {locales.Count} locale(s) from {Path.GetFullPath(path)}");
+
+            return locales;
+
+            static IEnumerable<LocaleColumn> ReadEntry(JToken entry) => entry switch
+            {
+                JObject alias => ReadProperties(alias),
+                _ => Column(entry.ToString()),
+            };
+
+            static List<LocaleColumn> ReadProperties(JObject map)
+                => [.. map.Properties().SelectMany(p => Column(p.Name, p.Value.ToString()))];
+
+            static IEnumerable<LocaleColumn> Column(string locale, string? column = null)
+            {
+                if (string.IsNullOrWhiteSpace(locale))
+                    yield break;
+
+                yield return new LocaleColumn(locale, string.IsNullOrWhiteSpace(column) ? locale : column);
+            }
+        }
+
+        /// <summary>
         /// How much of each language is actually filled in. Without this the csv looks complete the
         /// moment it has columns, and a half translated language is exactly the thing worth seeing.
         /// </summary>
-        static void PrintCoverage(List<List<string>> rows, List<string> locales)
+        static void PrintCoverage(List<List<string>> rows, List<LocaleColumn> locales)
         {
             Console.WriteLine();
             Console.WriteLine("filled in:");
@@ -176,7 +236,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 // +1 for the key column
                 var filled = rows.Count(r => !string.IsNullOrWhiteSpace(r[i + 1]));
                 var note = filled == 0 ? "  <- empty, ready to translate" : "";
-                Console.WriteLine($"        {locales[i],-10} {filled,4} of {rows.Count} key(s){note}");
+                Console.WriteLine($"        {locales[i].Column,-10} {filled,4} of {rows.Count} key(s){note}");
             }
         }
 

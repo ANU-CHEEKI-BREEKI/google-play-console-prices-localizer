@@ -95,8 +95,12 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "Locales that lead the exported columns, in this exact order, and that are always exported even when empty. These are the languages a translation service reads as its context. Default is the list from global config.json ('SourceLocales')."
             );
             CommandLinesUtils.PrintOption(
+                "--locales-file <path>",
+                "Specifies path to the json with every locale the exports produce a column for, a plain array of codes. If not specified, used path from global config json ('LocalesFilePath'), which defaults to './locales.json' next to it."
+            );
+            CommandLinesUtils.PrintOption(
                 "--locales <code[,code...]>",
-                "Every locale the exports produce a column for, on top of whatever is already translated. Needed for a language that exists in the console but is still empty, because the api cannot see those. Default is the list from global config.json ('Locales')."
+                "Locales to export columns for, for this run only. Overrides the whole locales json file."
             );
             CommandLinesUtils.PrintOption(
                 "--games-project <id>",

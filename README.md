@@ -321,18 +321,17 @@ achievement and one language at a time, which is why nobody ever finishes.
     exporting 73 achievement(s) in 3 language(s) into .../achievement-definitions.csv...
 
     written: .../achievement-definitions.csv
-    146 key(s) from 73 achievement(s), 5 language(s): en-US, uk, ru, es-ES, pt-PT
+    146 key(s) from 73 achievement(s), 44 language(s): en-US, uk, ru-RU, pt-PT, ... id as id-ID, ...
 
     filled in:
             en-US       146 of 146 key(s)
             uk            0 of 146 key(s)  <- empty, ready to translate
-            ru            0 of 146 key(s)  <- empty, ready to translate
-            es-ES         0 of 146 key(s)  <- empty, ready to translate
-            pt-PT         0 of 146 key(s)  <- empty, ready to translate
+            ru-RU         0 of 146 key(s)  <- empty, ready to translate
+            ...
 
 The csv is **one row per key, one column per language** - the layout every translation service reads:
 
-    key                                 en-US                       uk  ru  es-ES  pt-PT
+    key                                 en-US                       uk  ru-RU  pt-PT
     CgkIj8z_jpUZEAIQAQ.name             Slayer of Fury
     CgkIj8z_jpUZEAIQAQ.description      Defeat the Minotaur - ...
 
@@ -343,29 +342,43 @@ Open it in a spreadsheet or hand it to your translation service, fill the empty 
 
 #### Which columns, and in what order
 
-Every language the tool can see gets a column. Two config lists shape that:
+Every language the tool can see gets a column, plus every language named in **`locales.json`**, a plain
+list next to your `config.json`:
 
-    "SourceLocales": ["en-US", "uk", "ru"],
-    "Locales":       ["es-ES", "pt-PT"]
+    [
+        "en-US",
+        "uk",
+        "de-DE",
+        { "id": "id-ID" },
+        "iw-IL"
+    ]
+
+**That file exists because of a Play Games Services quirk.** PGS hides a language until something is
+actually translated into it, and its API exposes no language list at all. So a language you added in the
+console and have not filled in yet is *invisible* - and an invisible language gets no column, which is
+exactly the column you need. The file is the list, maintained by hand, because nothing can read it for you.
+
+An entry is normally just the code. The one property object form is for when the code Google wants and the
+column name have to differ: PGS calls indonesian `id`, which a translation service happily reads as an
+*identifier* column rather than a language, so the csv says `id-ID` while the API still gets `id`.
+
+Column **order** is the file's own order, with one thing in front of it:
+
+    "SourceLocales": ["en-US", "uk", "ru-RU"]
 
 **`SourceLocales` only decides what comes first. It never narrows anything down.** A translation service
 reads the leading columns as the context it translates from, so the order decides what it sees: english is
 the source, ukrainian is the second opinion, russian is filled by copying from the ukrainian one.
 
-**`Locales` is there because of a Play Games Services quirk.** PGS hides a language until something is
-actually translated into it, and its API exposes no language list at all. So a language you added in the
-console and have not filled in yet is *invisible* - and an invisible language gets no column, which is
-exactly the column you need. Naming it in `Locales` brings it back as an empty column.
+Full order: `SourceLocales`, then everything already translated (sorted), then `locales.json`. Duplicates
+collapse, so a locale in both still appears once, in its earliest position.
 
-Full order: `SourceLocales`, then everything already translated (sorted), then `Locales`, then anything
-`--languages` adds for one run. Duplicates collapse, so a locale in two lists still appears once, in its
-earliest position.
-
-Without `SourceLocales` the single `DefaultLanguageCode` leads. `--source-locales` and `--locales`
-override either config list for one run.
+Without `SourceLocales` the single `DefaultLanguageCode` leads. `--source-locales` overrides it for one
+run, `--locales-file` points at a different list, and `--locales en-US,uk` replaces the list entirely for
+one run.
 
 Use the codes **Play Games Services** uses, not the ones from your store page - run `locales` first, they
-are routinely different (`es-ES` against `es-419`, `pt-PT` against `pt-BR`).
+are routinely different (`es-ES` against `es-419`, `pt-PT` against `pt-BR`, hebrew as `iw-IL`).
 
 Those languages have to exist in the games project first, and no API can add them:
 
