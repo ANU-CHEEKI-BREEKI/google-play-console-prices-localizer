@@ -49,78 +49,60 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 Console.WriteLine($"read {csv.Rows.Count} key(s) in {csv.Locales.Count} language(s) from {Path.GetFullPath(path)}");
                 Console.WriteLine("receiving achievements...");
 
-                var achievements = (await GamesService!.AchievementConfigurations.ListAllAsync(GamesProjectId))
-                    .Where(a => !string.IsNullOrWhiteSpace(a.Id))
-                    .ToDictionary(a => a.Id!, StringComparer.Ordinal);
-
-                var changed = new List<GamesConfig.Data.AchievementConfiguration>();
-                var unchanged = 0;
-                var unknown = new List<string>();
-
-                foreach (var group in csv.ById)
-                {
-                    if (!achievements.TryGetValue(group.Key, out var achievement))
-                    {
-                        unknown.Add(group.Key);
-                        continue;
-                    }
-
-                    // the draft is the editable copy. An achievement never touched since it went live
-                    // has none, so it starts as a copy of what is published
-                    achievement.Draft ??= achievement.Published ?? new GamesConfig.Data.AchievementConfigurationDetail();
-
-                    var edits = 0;
-
-                    foreach (var row in group)
-                    {
-                        var bundle = row.Field switch
-                        {
-                            NameField => achievement.Draft.Name ??= new GamesConfig.Data.LocalizedStringBundle(),
-                            DescriptionField => achievement.Draft.Description ??= new GamesConfig.Data.LocalizedStringBundle(),
-                            _ => null,
-                        };
-
-                        if (bundle is null)
-                        {
-                            Console.WriteLine($"Warning: '{row.Key}' is neither a {NameField} nor a {DescriptionField}, skipped.");
-                            continue;
-                        }
-
-                        edits += Merge(bundle, row.Values, verbose ? row.Key : null);
-                    }
-
-                    if (edits > 0)
-                        changed.Add(achievement);
-                    else
-                        unchanged++;
-                }
-
-                foreach (var id in unknown)
-                    Console.WriteLine($"Warning: no achievement '{id}' in this games project, skipped.");
+                var changes = await BuildChanges(csv, [], verbose);
 
                 Console.WriteLine();
-                Console.WriteLine($"{changed.Count} achievement(s) to update, {unchanged} already up to date, {unknown.Count} unknown.");
+                Console.WriteLine($"{changes.Changed.Count} achievement(s) to update, {changes.Unchanged} already up to date, {changes.Unknown} unknown.");
 
-                if (changed.Count == 0)
+                if (changes.Changed.Count == 0)
                     return;
 
                 if (dryRun)
                 {
                     Console.WriteLine();
                     Console.WriteLine("dry run, nothing was sent:");
-                    foreach (var achievement in changed)
+                    foreach (var achievement in changes.Changed)
                         Console.WriteLine($"        {achievement.Id}  {Summarize(achievement.Draft)}");
                     return;
                 }
 
                 Console.WriteLine();
 
-                var written = 0;
+                // one achievement goes first, on its own. Play Games Services rejects a whole request
+                // over a single locale it does not accept, and there is no point finding that out 73
+                // times in a row
+                var canary = changes.Changed[0];
+                var refused = await FindRefusedLocales(canary, csv.Locales);
 
-                foreach (var achievement in changed)
+                if (refused is null)
+                    return;
+
+                var written = 1;
+
+                if (refused.Count > 0)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine($"dropping {refused.Count} language(s) Google refused: {string.Join(", ", refused)}");
+                    Console.WriteLine();
+
+                    // start over without them, against freshly listed achievements. Rebuilding is what
+                    // keeps the count honest - with the refused languages gone, most of the csv often
+                    // turns out to change nothing at all - and the probe left this one's token stale
+                    changes = await BuildChanges(csv, refused, verbose);
+
+                    Console.WriteLine($"{changes.Changed.Count} achievement(s) still to update in the languages that were accepted.");
+                    written = 0;
+                }
+                else
+                {
+                    // the probe already wrote the canary, and its token is stale now
+                    changes.Changed.RemoveAt(0);
+                }
+
+                foreach (var achievement in changes.Changed)
                 {
                     var ok = await Extensions.ExecuteWithRetryAsync(
-                        async () => await GamesService.AchievementConfigurations.Update(achievement, achievement.Id).ExecuteAsync(),
+                        async () => await GamesService!.AchievementConfigurations.Update(achievement, achievement.Id).ExecuteAsync(),
                         achievement.Id!
                     );
 
@@ -133,8 +115,11 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 }
 
                 Console.WriteLine();
-                Console.WriteLine($"updated {written} of {changed.Count} achievement(s).");
+                Console.WriteLine($"updated {written} achievement(s).");
                 Console.WriteLine("the translations are in the draft now. Publish the games services configuration in the console to put them in front of players.");
+
+                if (refused.Count > 0)
+                    PrintRefusedHelp(refused);
             }
             catch (Exception ex)
             {
@@ -143,6 +128,279 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 Console.WriteLine("if this is a 400 about a locale, that language is not in the games project yet:");
                 Console.WriteLine("Play Games Services -> Setup and management -> Configuration -> Edit properties -> Manage translations");
             }
+        }
+
+        record Changes(List<GamesConfig.Data.AchievementConfiguration> Changed, int Unchanged, int Unknown);
+
+        /// <summary>
+        /// Lists the achievements afresh and merges the csv into them, skipping
+        /// <paramref name="refused"/> entirely. Freshly listed on purpose: an achievement carries a
+        /// token that goes stale the moment something writes to it, and the probe writes.
+        /// </summary>
+        async Task<Changes> BuildChanges(TranslationsCsv csv, List<string> refused, bool verbose)
+        {
+            var achievements = (await GamesService!.AchievementConfigurations.ListAllAsync(GamesProjectId))
+                .Where(a => !string.IsNullOrWhiteSpace(a.Id))
+                .ToDictionary(a => a.Id!, StringComparer.Ordinal);
+
+            var changed = new List<GamesConfig.Data.AchievementConfiguration>();
+            var unchanged = 0;
+            var unknown = new List<string>();
+
+            foreach (var group in csv.ById)
+            {
+                if (!achievements.TryGetValue(group.Key, out var achievement))
+                {
+                    unknown.Add(group.Key);
+                    continue;
+                }
+
+                // the draft is the editable copy. An achievement never touched since it went live
+                // has none, so it starts as a copy of what is published
+                achievement.Draft ??= achievement.Published ?? new GamesConfig.Data.AchievementConfigurationDetail();
+
+                var edits = 0;
+
+                foreach (var row in group)
+                {
+                    var bundle = row.Field switch
+                    {
+                        NameField => achievement.Draft.Name ??= new GamesConfig.Data.LocalizedStringBundle(),
+                        DescriptionField => achievement.Draft.Description ??= new GamesConfig.Data.LocalizedStringBundle(),
+                        _ => null,
+                    };
+
+                    if (bundle is null)
+                    {
+                        Console.WriteLine($"Warning: '{row.Key}' is neither a {NameField} nor a {DescriptionField}, skipped.");
+                        continue;
+                    }
+
+                    var values = refused.Count == 0
+                        ? row.Values
+                        : row.Values
+                            .Where(v => !refused.Contains(v.Key, StringComparer.OrdinalIgnoreCase))
+                            .ToDictionary(v => v.Key, v => v.Value, StringComparer.OrdinalIgnoreCase);
+
+                    edits += Merge(bundle, values, verbose ? row.Key : null);
+                }
+
+                if (edits > 0)
+                    changed.Add(achievement);
+                else
+                    unchanged++;
+            }
+
+            foreach (var id in unknown)
+                Console.WriteLine($"Warning: no achievement '{id}' in this games project, skipped.");
+
+            return new Changes(changed, unchanged, unknown.Count);
+        }
+
+        /// <summary>
+        /// Sends one achievement on its own until it goes through, working out which locales Google
+        /// will not take. Answers those locales, or null when the request fails for a reason that is
+        /// not about a locale at all - there is nothing sensible to do with the other 72 then.
+        ///
+        /// Play Games Services refuses a whole request over one bad locale, and is only sometimes
+        /// helpful about which:
+        ///   "The locale uk in the name field is not supported by the application"
+        ///        - a real code, just not added to the games project yet. Named, so it can just go.
+        ///   "Localized string has invalid locale code"
+        ///        - not a code Google knows at all, and it will not say which one. Found by halving.
+        /// </summary>
+        async Task<List<string>?> FindRefusedLocales(GamesConfig.Data.AchievementConfiguration canary, List<LocaleColumn> locales)
+        {
+            var snapshot = Snapshot(canary.Draft);
+            var alive = locales.Select(l => l.Locale).ToList();
+            var refused = new List<string>();
+
+            // worst case one round per locale, plus the round that finally succeeds
+            for (int round = 0; round <= locales.Count; round++)
+            {
+                var error = await Send(canary, snapshot, alive);
+
+                if (error is null)
+                    return refused;
+
+                var named = UnsupportedLocale(error.Message);
+
+                if (named is not null)
+                {
+                    Console.WriteLine($"   Google refuses '{named}': not added to the games project");
+                    refused.Add(named);
+                    alive.RemoveAll(l => string.Equals(l, named, StringComparison.OrdinalIgnoreCase));
+                    continue;
+                }
+
+                if (!IsInvalidLocaleCode(error.Message))
+                {
+                    Console.WriteLine($"[ERROR] Google Play rejected {canary.Id} and the whole import stopped here.");
+                    Console.WriteLine($"        {error.Message.Trim()}");
+                    Console.WriteLine("        Nothing was written.");
+                    return null;
+                }
+
+                // Google will not name it, so halve the list until a single locale is left holding it
+                Console.WriteLine("   Google says one of the locale codes is invalid but not which one, looking for it...");
+
+                var bad = await FindOneInvalid(canary, snapshot, alive);
+
+                if (bad is null)
+                {
+                    Console.WriteLine($"[ERROR] could not work out which locale code Google objects to.");
+                    Console.WriteLine($"        {error.Message.Trim()}");
+                    Console.WriteLine($"        the request carried: {string.Join(", ", alive)}");
+                    Console.WriteLine("        Nothing was written.");
+                    return null;
+                }
+
+                Console.WriteLine($"   Google refuses '{bad}': not a locale code Play Games Services knows");
+                refused.Add(bad);
+                alive.RemoveAll(l => string.Equals(l, bad, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return refused;
+        }
+
+        /// <summary>
+        /// Binary search for one locale Google calls invalid. The default language rides along in every
+        /// probe, because an achievement without it is a different kind of broken.
+        /// </summary>
+        async Task<string?> FindOneInvalid(
+            GamesConfig.Data.AchievementConfiguration canary,
+            Snapshotted snapshot,
+            List<string> suspects
+        )
+        {
+            while (suspects.Count > 1)
+            {
+                var half = suspects.Take(suspects.Count / 2).ToList();
+
+                if (half.Count == 0)
+                    return null;
+
+                var error = await Send(canary, snapshot, WithDefault(half));
+
+                if (error is not null && IsInvalidLocaleCode(error.Message))
+                {
+                    suspects = half;
+                    continue;
+                }
+
+                // this half is clean, so the one Google objects to is in the other
+                suspects = [.. suspects.Skip(suspects.Count / 2)];
+            }
+
+            return suspects.FirstOrDefault();
+        }
+
+        List<string> WithDefault(List<string> locales)
+        {
+            var withDefault = new List<string>(locales);
+
+            if (!string.IsNullOrWhiteSpace(Config.DefaultLanguageCode)
+                && !withDefault.Contains(Config.DefaultLanguageCode, StringComparer.OrdinalIgnoreCase))
+            {
+                withDefault.Insert(0, Config.DefaultLanguageCode);
+            }
+
+            return withDefault;
+        }
+
+        /// <summary>sends the canary carrying exactly these locales. null means Google took it</summary>
+        async Task<Google.GoogleApiException?> Send(
+            GamesConfig.Data.AchievementConfiguration canary,
+            Snapshotted snapshot,
+            List<string> locales
+        )
+        {
+            snapshot.ApplyTo(canary.Draft, locales);
+
+            try
+            {
+                await GamesService!.AchievementConfigurations.Update(canary, canary.Id).ExecuteAsync();
+                return null;
+            }
+            catch (Google.GoogleApiException ex)
+            {
+                return ex;
+            }
+        }
+
+        static bool IsInvalidLocaleCode(string message)
+            => message.Contains("invalid locale code", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// the canary's translations as they came out of the csv merge, so a probe can put back any
+        /// subset of them without having to redo the merge
+        /// </summary>
+        record Snapshotted(List<GamesConfig.Data.LocalizedString> Name, List<GamesConfig.Data.LocalizedString> Description)
+        {
+            public void ApplyTo(GamesConfig.Data.AchievementConfigurationDetail? detail, List<string> locales)
+            {
+                if (detail is null)
+                    return;
+
+                Apply(detail.Name, Name);
+                Apply(detail.Description, Description);
+
+                void Apply(GamesConfig.Data.LocalizedStringBundle? bundle, List<GamesConfig.Data.LocalizedString> all)
+                {
+                    if (bundle is null)
+                        return;
+
+                    bundle.Translations = [.. all.Where(t => locales.Contains(t.Locale, StringComparer.OrdinalIgnoreCase))];
+                }
+            }
+        }
+
+        static Snapshotted Snapshot(GamesConfig.Data.AchievementConfigurationDetail? detail)
+            => new(
+                [.. detail?.Name?.Translations ?? []],
+                [.. detail?.Description?.Translations ?? []]
+            );
+
+        /// <summary>
+        /// the locale out of "The locale uk in the name field is not supported by the application".
+        /// null when the message is not that one
+        /// </summary>
+        static string? UnsupportedLocale(string message)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                message,
+                @"The locale (?<locale>[A-Za-z0-9\-_]+) in the \w+ field is not supported"
+            );
+
+            return match.Success ? match.Groups["locale"].Value : null;
+        }
+
+        static void Drop(GamesConfig.Data.AchievementConfigurationDetail? detail, IReadOnlyCollection<string> locales)
+        {
+            Drop(detail?.Name, locales);
+            Drop(detail?.Description, locales);
+
+            static void Drop(GamesConfig.Data.LocalizedStringBundle? bundle, IReadOnlyCollection<string> locales)
+            {
+                if (bundle?.Translations is null)
+                    return;
+
+                // the generated data class exposes an IList, so no RemoveAll to lean on
+                foreach (var translation in bundle.Translations.ToList())
+                {
+                    if (locales.Contains(translation.Locale, StringComparer.OrdinalIgnoreCase))
+                        bundle.Translations.Remove(translation);
+                }
+            }
+        }
+
+        static void PrintRefusedHelp(List<string> refused)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"these {refused.Count} language(s) were NOT imported: {string.Join(", ", refused)}");
+            Console.WriteLine("Google knows the codes, they are just not turned on for this games project yet. Add them once:");
+            Console.WriteLine("        Play Games Services -> Setup and management -> Configuration -> Edit properties -> Manage translations");
+            Console.WriteLine("then run this command again - everything already imported is skipped as up to date.");
         }
 
         /// <summary>

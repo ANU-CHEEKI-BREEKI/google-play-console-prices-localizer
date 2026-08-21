@@ -458,6 +458,23 @@ Four things worth knowing before running it:
 - **Cells are trimmed.** A stray leading or trailing space in the csv is not sent as a change of its own,
   and a value that only differs from Google's by surrounding whitespace *is* rewritten without it.
 
+**Play Games Services refuses a whole request over one language it does not accept**, so the import sends
+one achievement on its own first and works out which ones those are before touching the other 72:
+
+    Google says one of the locale codes is invalid but not which one, looking for it...
+    Google refuses 'bs': not a locale code Play Games Services knows
+    Google refuses 'uk': not added to the games project
+    ...
+    dropping 43 language(s) Google refused: bs, ga, uk, ru-RU, ...
+
+Two different refusals, and the difference matters:
+
+- **"not added to the games project"** - a real code, just not turned on for this game. Fixable, see below.
+- **"not a locale code Play Games Services knows"** - Google will not even say which one it means, so the
+  import halves the list until it finds it. Take those out of your `locales.json`; PGS has no `bs` or `ga`.
+
+Whatever is left is imported normally, and the run ends by listing what was dropped and why.
+
 For achievements, only the **draft** is written - the copy the console edits. Publish the games services
 configuration in the console to put the translations in front of players. A language has to exist in the
 games project first, and no API can add one:
