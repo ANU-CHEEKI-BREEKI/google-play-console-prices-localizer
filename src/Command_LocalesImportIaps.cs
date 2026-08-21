@@ -113,34 +113,52 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 if (verbose)
                     Console.WriteLine($"regions version: {regionsVersion}");
 
-                var written = 0;
-
-                foreach (var product in changed)
+                // one batch, not thirty patches. Google writes a product in its own time, and asked
+                // one at a time it took a quarter of an hour each - the same thirty products go
+                // through in about two minutes when they are sent together
+                var body = new BatchUpdateOneTimeProductsRequest
                 {
-                    // listings only: without the mask the patch would be read as "here is the whole
-                    // product", and everything this command does not know about would be wiped
-                    var request = Service.Monetization.Onetimeproducts.Patch(product, Package, product.ProductId);
-                    request.UpdateMask = "listings";
-                    request.RegionsVersionVersion = regionsVersion;
-                    // a listing change should show up fast, there is no region list to grind through
-                    request.LatencyTolerance = MonetizationResource.OnetimeproductsResource
-                        .PatchRequest.LatencyToleranceEnum.PRODUCTUPDATELATENCYTOLERANCELATENCYSENSITIVE;
-
-                    var ok = await Extensions.ExecuteWithRetryAsync(
-                        async () => await request.ExecuteAsync(),
-                        product.ProductId!
-                    );
-
-                    if (ok)
+                    Requests = [.. changed.Select(product => new UpdateOneTimeProductRequest
                     {
-                        written++;
-                        if (verbose)
-                            Console.WriteLine($"   {product.ProductId}: {product.Listings?.Count ?? 0} listing(s)");
-                    }
-                }
+                        OneTimeProduct = product,
+
+                        // listings only: without the mask this would be read as "here is the whole
+                        // product", and everything this command does not know about would be wiped
+                        UpdateMask = "listings",
+
+                        RegionsVersion = new RegionsVersion { Version = regionsVersion },
+                        LatencyTolerance = Extensions.LatencyTolerant,
+                    })],
+                };
+
+                Console.WriteLine($"   -> updating {changed.Count} product(s) in one request...");
+                Console.WriteLine("      Google takes a couple of minutes to write a batch, this is normal.");
+
+                var ok = await Extensions.ExecuteWithRetryAsync(
+                    () => Extensions.Timed("the listings update", async () =>
+                    {
+                        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(15));
+                        await Service.Monetization.Onetimeproducts.BatchUpdate(body, Package).ExecuteAsync(timeout.Token);
+                    }),
+                    $"{changed.Count} product(s)"
+                );
 
                 Console.WriteLine();
-                Console.WriteLine($"updated {written} of {changed.Count} product(s). Prices were not part of the request.");
+
+                if (!ok)
+                {
+                    Console.WriteLine("nothing was written: a batch is all or nothing.");
+                    Console.WriteLine("re-run for one product at a time with --iap <id> to find the one Google objects to.");
+                    return;
+                }
+
+                Console.WriteLine($"updated {changed.Count} product(s). Prices were not part of the request.");
+
+                if (verbose)
+                {
+                    foreach (var product in changed)
+                        Console.WriteLine($"   {product.ProductId}: {product.Listings?.Count ?? 0} listing(s)");
+                }
             }
             catch (Exception ex)
             {
