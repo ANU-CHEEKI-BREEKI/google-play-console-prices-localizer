@@ -481,6 +481,12 @@ games project first, and no API can add one:
 
 > Play Games Services -> Setup and management -> **Configuration** -> Edit properties -> Manage translations
 
+Products go in **one batch**, not one request each: Google writes a product in its own time no matter how
+small the change, and asked one at a time it took roughly a quarter of an hour *per product*. A batch is
+all or nothing, so one language Google will not accept sinks all of them - it does name the language
+though, so the import drops it, sends again, and lists what never made it. `bs` and `ga` are not accepted
+for product listings, same as in Play Games Services.
+
 For products, the patch carries an update mask of `listings`, so **prices, regions and purchase options are
 not in the request at all** - `localize` keeps owning them. A listing needs *both* a title and a
 description, so a language that would end up with only one of them is dropped with a warning instead of
