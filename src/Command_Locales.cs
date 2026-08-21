@@ -30,6 +30,9 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 ("export", "achievements") => new Command_LocalesExportAchievements(),
                 ("export", "iaps") => new Command_LocalesExportIaps(),
 
+                ("import", "achievements") => new Command_LocalesImportAchievements(),
+                ("import", "iaps") => new Command_LocalesImportIaps(),
+
                 _ => new Unknown(name, target),
             };
         }
@@ -66,13 +69,15 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             Console.WriteLine("locales [list]");
             Console.WriteLine("locales export achievements [options]");
             Console.WriteLine("locales export iaps [options]");
+            Console.WriteLine("locales import achievements [options]");
+            Console.WriteLine("locales import iaps [options]");
             Console.WriteLine();
             Console.WriteLine();
 
             Console.WriteLine("description:");
             CommandLinesUtils.PrintDescription(Description);
             CommandLinesUtils.PrintDescription("Google keeps three independent language lists for one game - the store listing, the Play Games Services translations and the one-time product listings - and nothing keeps them in sync. They do not even agree on the codes: es-419 on the store page against es-ES in the achievements, hebrew as iw-IL.");
-            CommandLinesUtils.PrintDescription("The exports all write the same shape of csv, one row per key and one column per language, and all read the same 'SourceLocales' and locales json to decide the columns.");
+            CommandLinesUtils.PrintDescription("The exports all write the same shape of csv, one row per key and one column per language, and all read the same 'SourceLocales' and locales json to decide the columns. The imports read that csv back.");
 
             Console.WriteLine();
             Console.WriteLine("subcommands:");
@@ -80,6 +85,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintOption("list", "Show which languages exist in the store listing, in Play Games Services and in the products, and which are missing from where. This is the default when no subcommand is given.");
             CommandLinesUtils.PrintOption("export achievements", "Write every achievement name and description into a translatable csv.");
             CommandLinesUtils.PrintOption("export iaps", "Write every One-time product title and description into a translatable csv.");
+            CommandLinesUtils.PrintOption("import achievements", "Write a translated achievements csv back into Play Games Services.");
+            CommandLinesUtils.PrintOption("import iaps", "Write a translated products csv back into the One-time product listings. Prices are never part of the request.");
 
             Console.WriteLine();
             Console.WriteLine("Run 'locales <subcommand> --help' for the options of one subcommand.");
@@ -91,6 +98,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintDescription("locales export achievements                # 73 achievements out to a csv", 4);
             CommandLinesUtils.PrintDescription("locales export iaps --iap pack_one         # one product only", 4);
             CommandLinesUtils.PrintDescription("locales export iaps --locales en-US,uk     # two columns, ignore the locales json", 4);
+            CommandLinesUtils.PrintDescription("locales import achievements -n             # what the csv would change, sent nowhere", 4);
+            CommandLinesUtils.PrintDescription("locales import iaps                        # the translated titles go live", 4);
         }
 
         /// <summary>a subcommand that does not exist, kept as a CommandBase so the router stays uniform</summary>

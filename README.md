@@ -251,6 +251,8 @@ Everything about languages lives under one command, because everything about lan
     locales                         # what exists where, the default
     locales export achievements     # achievement names and descriptions out to a csv
     locales export iaps             # product titles and descriptions out to a csv
+    locales import achievements     # the translated csv back into Play Games Services
+    locales import iaps             # the translated csv back into the product listings
 
 Run `locales <subcommand> --help` for the options of one of them.
 
@@ -432,6 +434,42 @@ same `SourceLocales` and `locales.json` decide the columns:
 
 **Not to be confused with the top level `export-iaps`.** That one writes the product definitions csv `create-iaps` reads
 back: prices, one language, one row per product. This one is only about the text, and never touches a price.
+
+#### `locales import achievements` and `locales import iaps`
+
+Same csv, the other direction:
+
+    dotnet run -- locales import achievements -n     # what would change, sent nowhere
+    dotnet run -- locales import achievements        # for real
+
+    read 146 key(s) in 44 language(s) from .../achievement-translations.csv
+    receiving achievements...
+
+    41 achievement(s) to update, 32 already up to date, 0 unknown.
+
+Four things worth knowing before running it:
+
+- **An empty cell means "not translated yet"** and is left alone. It never wipes a translation that is
+  already there. There is no way to delete a translation with this tool, on purpose.
+- **A value identical to what Google already has is not sent.** Re-running an unchanged csv does nothing
+  and costs one read. That is what the "already up to date" count is.
+- **Column headers are mapped back through `locales.json`**, so a column the export wrote as `id-ID`
+  still reaches the API as `id`.
+- **Cells are trimmed.** A stray leading or trailing space in the csv is not sent as a change of its own,
+  and a value that only differs from Google's by surrounding whitespace *is* rewritten without it.
+
+For achievements, only the **draft** is written - the copy the console edits. Publish the games services
+configuration in the console to put the translations in front of players. A language has to exist in the
+games project first, and no API can add one:
+
+> Play Games Services -> Setup and management -> **Configuration** -> Edit properties -> Manage translations
+
+For products, the patch carries an update mask of `listings`, so **prices, regions and purchase options are
+not in the request at all** - `localize` keeps owning them. A listing needs *both* a title and a
+description, so a language that would end up with only one of them is dropped with a warning instead of
+being rejected by Google, and so is anything past the 55 / 200 character limits.
+
+Both take `-n` / `--dry-run`. `locales import iaps` also takes `--iap pack_one,pack_two`.
 
 Google rejects a title over 55 characters or a description over 200, and a translation is routinely longer
 than the english it came from. Anything already over the limit is listed at the end of the run.
