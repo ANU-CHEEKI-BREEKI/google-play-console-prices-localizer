@@ -14,6 +14,13 @@ public class Config
     /// </summary>
     public string ProductDefinitionsFilePath { get; set; } = "./product-definitions.csv";
 
+    /// <summary>
+    /// csv with the achievement translations the 'export-achievements' command writes.
+    /// like ProductDefinitionsFilePath the default must not be empty, Program.cs combines it
+    /// with the config directory
+    /// </summary>
+    public string AchievementDefinitionsFilePath { get; set; } = "./achievement-definitions.csv";
+
     /// <summary>language of the store listing the 'export-iaps' and 'create-iaps' commands read and write</summary>
     public string DefaultLanguageCode { get; set; } = "en-US";
 

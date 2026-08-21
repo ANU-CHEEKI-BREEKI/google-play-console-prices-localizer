@@ -309,6 +309,51 @@ same `androidpublisher` scope the IAP commands already use.
 
 ---
 
+### Translating achievements
+
+Google machine translates your store page. It **never** touches achievements - a game with 73 of them
+in English has 73 of them in English in every country. The console only lets you click through one
+achievement and one language at a time, which is why nobody ever finishes.
+
+    dotnet run -- export-achievements --languages uk,es-ES,pt-PT
+
+    receiving achievements...
+    exporting 73 achievement(s) in 4 language(s) into .../achievement-definitions.csv...
+
+    written: .../achievement-definitions.csv
+    73 achievement(s), 4 language(s): en-US, es-ES, pt-PT, uk
+
+    filled in:
+            en-US        73 name(s),   73 description(s) of 73
+            es-ES         0 name(s),    0 description(s) of 73  <- empty, ready to translate
+            pt-PT         0 name(s),    0 description(s) of 73  <- empty, ready to translate
+            uk            0 name(s),    0 description(s) of 73  <- empty, ready to translate
+
+The csv is one row per achievement, two columns per language:
+
+    achievement_id      name[en-US]     description[en-US]      name[uk]    description[uk]
+    CgkIj8z_...         Slayer of Fury  Defeat the Minotaur...
+
+Open it in a spreadsheet, fill the empty columns, done.
+
+Without `--languages` the columns are only the languages that already carry a translation. `--languages`
+is what gets you the empty columns to fill. Use the codes **Play Games Services** uses, not the ones from
+your store page - run `locales` first, they are routinely different (`es-ES` against `es-419`, `pt-PT`
+against `pt-BR`).
+
+Those languages have to exist in the games project first, and no API can add them:
+
+> Play Games Services -> Setup and management -> **Configuration** -> Edit properties -> Manage translations
+
+The export reads the **draft** version, the one the console edits, falling back to the published one for
+an achievement never touched since it went live. Points, type, steps and icons are not exported and never
+change. Rows come out in the console's own order, by sort rank.
+
+Needs `GamesProjectId` in `config.json` and the `Google Play Game Services Publishing API` enabled -
+see [the `locales` section](#which-languages-do-i-already-have) above.
+
+---
+
 ### Examples
 
 1. You cloned the repository and built the program.

@@ -1,4 +1,5 @@
 using Google.Apis.AndroidPublisher.v3.Data;
+using GamesConfig = Google.Apis.GamesConfiguration.v1configuration;
 
 namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 {
@@ -132,33 +133,11 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 var achievements = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                 var leaderboards = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-                string? pageToken = null;
-                do
-                {
-                    var request = GamesService!.AchievementConfigurations.List(GamesProjectId);
-                    request.PageToken = pageToken;
-                    var response = await request.ExecuteAsync();
+                foreach (var item in await GamesService!.AchievementConfigurations.ListAllAsync(GamesProjectId))
+                    CountLocales(achievements, item.Draft?.Name, item.Draft?.Description, item.Published?.Name, item.Published?.Description);
 
-                    foreach (var item in response.Items ?? [])
-                        CountLocales(item.Draft?.Name, item.Draft?.Description, item.Published?.Name, item.Published?.Description, achievements);
-
-                    pageToken = response.NextPageToken;
-                }
-                while (!string.IsNullOrEmpty(pageToken));
-
-                pageToken = null;
-                do
-                {
-                    var request = GamesService!.LeaderboardConfigurations.List(GamesProjectId);
-                    request.PageToken = pageToken;
-                    var response = await request.ExecuteAsync();
-
-                    foreach (var item in response.Items ?? [])
-                        CountLocales(item.Draft?.Name, null, item.Published?.Name, null, leaderboards);
-
-                    pageToken = response.NextPageToken;
-                }
-                while (!string.IsNullOrEmpty(pageToken));
+                foreach (var item in await GamesService.LeaderboardConfigurations.ListAllAsync(GamesProjectId))
+                    CountLocales(leaderboards, item.Draft?.Name, item.Published?.Name);
 
                 var locales = achievements.Keys.Concat(leaderboards.Keys)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -198,21 +177,9 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
             try
             {
-                var products = new List<OneTimeProduct>();
-
-                string? pageToken = null;
-                do
-                {
-                    var request = Service!.Monetization.Onetimeproducts.List(Package);
-                    request.PageToken = pageToken;
-                    var response = await request.ExecuteAsync();
-
-                    products.AddRange(response.OneTimeProducts ?? []);
-                    pageToken = response.NextPageToken;
-                }
-                while (!string.IsNullOrEmpty(pageToken));
-
-                products = products.Filter(IapFilter).ToList();
+                var products = (await Service!.Monetization.Onetimeproducts.ListAllAsync(Package))
+                    .Filter(IapFilter)
+                    .ToList();
 
                 if (products.Count == 0)
                 {
@@ -289,23 +256,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             }
         }
 
-        static void CountLocales(
-            Google.Apis.GamesConfiguration.v1configuration.Data.LocalizedStringBundle? draftName,
-            Google.Apis.GamesConfiguration.v1configuration.Data.LocalizedStringBundle? draftDescription,
-            Google.Apis.GamesConfiguration.v1configuration.Data.LocalizedStringBundle? publishedName,
-            Google.Apis.GamesConfiguration.v1configuration.Data.LocalizedStringBundle? publishedDescription,
-            Dictionary<string, int> counts
-        )
+        /// <summary>counts one item once per locale, no matter how many of its bundles carry that locale</summary>
+        static void CountLocales(Dictionary<string, int> counts, params GamesConfig.Data.LocalizedStringBundle?[] bundles)
         {
-            // one item counts once per locale, no matter how many of its four bundles carry that locale
-            var locales = new[] { draftName, draftDescription, publishedName, publishedDescription }
-                .Where(bundle => bundle is not null)
-                .SelectMany(bundle => bundle!.Translations ?? [])
-                .Select(t => t.Locale)
-                .Where(l => !string.IsNullOrWhiteSpace(l))
-                .Distinct(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var locale in locales)
+            foreach (var locale in bundles.SelectMany(b => b.Locales()).Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 counts.TryGetValue(locale, out var count);
                 counts[locale] = count + 1;

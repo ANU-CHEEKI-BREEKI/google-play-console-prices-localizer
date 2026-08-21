@@ -4,6 +4,7 @@ using System.Text;
 using Google;
 using Google.Apis.AndroidPublisher.v3;
 using Google.Apis.AndroidPublisher.v3.Data;
+using GamesConfig = Google.Apis.GamesConfiguration.v1configuration;
 
 namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 {
@@ -128,6 +129,76 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
             return all;
         }
+
+        public static async Task<List<GamesConfig.Data.AchievementConfiguration>> ListAllAsync(
+            this GamesConfig.AchievementConfigurationsResource resource,
+            string gamesProjectId,
+            int pageSize = 200
+        )
+        {
+            var all = new List<GamesConfig.Data.AchievementConfiguration>();
+            string? pageToken = null;
+
+            do
+            {
+                var request = resource.List(gamesProjectId);
+                request.MaxResults = pageSize;
+                request.PageToken = pageToken;
+
+                var response = await request.ExecuteAsync();
+
+                if (response.Items is not null)
+                    all.AddRange(response.Items);
+
+                pageToken = response.NextPageToken;
+            }
+            while (!string.IsNullOrEmpty(pageToken));
+
+            return all;
+        }
+
+        public static async Task<List<GamesConfig.Data.LeaderboardConfiguration>> ListAllAsync(
+            this GamesConfig.LeaderboardConfigurationsResource resource,
+            string gamesProjectId,
+            int pageSize = 200
+        )
+        {
+            var all = new List<GamesConfig.Data.LeaderboardConfiguration>();
+            string? pageToken = null;
+
+            do
+            {
+                var request = resource.List(gamesProjectId);
+                request.MaxResults = pageSize;
+                request.PageToken = pageToken;
+
+                var response = await request.ExecuteAsync();
+
+                if (response.Items is not null)
+                    all.AddRange(response.Items);
+
+                pageToken = response.NextPageToken;
+            }
+            while (!string.IsNullOrEmpty(pageToken));
+
+            return all;
+        }
+
+        /// <summary>
+        /// value of the bundle in one locale, empty when that locale is not translated.
+        /// Locales are matched case insensitively, the console and the api disagree on the casing
+        /// of things like pt-BR often enough to matter
+        /// </summary>
+        public static string ValueFor(this GamesConfig.Data.LocalizedStringBundle? bundle, string locale)
+            => (bundle?.Translations ?? [])
+                .FirstOrDefault(t => string.Equals(t.Locale, locale, StringComparison.OrdinalIgnoreCase))
+                ?.Value ?? "";
+
+        /// <summary>every locale the bundle carries a translation for</summary>
+        public static IEnumerable<string> Locales(this GamesConfig.Data.LocalizedStringBundle? bundle)
+            => (bundle?.Translations ?? [])
+                .Select(t => t.Locale)
+                .Where(l => !string.IsNullOrWhiteSpace(l))!;
 
         /// <summary>
         /// exact decimal price, unlike ToDecimalPrice it never routes through a double

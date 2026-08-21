@@ -1,0 +1,232 @@
+using GamesConfig = Google.Apis.GamesConfiguration.v1configuration;
+
+namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
+{
+    /// <summary>
+    /// Exports every achievement's name and description, one column pair per language, into a csv
+    /// meant to be handed to a translator and fed back by 'import-achievements'.
+    ///
+    /// Google never machine translates achievements the way it does the store page, so a game that
+    /// ships 70 of them in English ships 70 of them in English everywhere. The console can only be
+    /// clicked through one achievement and one language at a time, which is what makes this the
+    /// single most requested translation nobody ever gets around to.
+    /// </summary>
+    public class Command_ExportAchievements : CommandBase
+    {
+        const string IdHeader = "achievement_id";
+
+        public override bool NeedsAndroidPublisher => false;
+        public override bool NeedsGamesConfiguration => true;
+
+        public override async Task ExecuteAsync()
+        {
+            try
+            {
+                var verbose = Args.HasFlag("-v");
+
+                if (string.IsNullOrWhiteSpace(GamesProjectId))
+                {
+                    Console.WriteLine("no games project id. specify 'GamesProjectId' in config.json, or pass --games-project <id>");
+                    Console.WriteLine("the console shows it next to the game name, as 'Project ID'");
+                    return;
+                }
+
+                var path = Config.AchievementDefinitionsFilePath;
+                if (string.IsNullOrWhiteSpace(path) || Directory.Exists(path))
+                {
+                    Console.WriteLine($"[ERROR] '{path}' is not a file to write the csv into.");
+                    Console.WriteLine("        set 'AchievementDefinitionsFilePath' in your config.json, or pass --achievements <path>");
+                    return;
+                }
+
+                Console.WriteLine("receiving achievements...");
+
+                var achievements = await GamesService!.AchievementConfigurations.ListAllAsync(GamesProjectId);
+
+                if (achievements.Count == 0)
+                {
+                    Console.WriteLine("no achievements to export.");
+                    return;
+                }
+
+                // the draft is what the console edits and what 'import-achievements' writes back,
+                // the published copy is only a fallback for an achievement never edited since it went live
+                var details = achievements.ToDictionary(
+                    a => a,
+                    a => a.Draft ?? a.Published
+                );
+
+                var locales = ResolveLocales(details.Values);
+
+                if (locales.Count == 0)
+                {
+                    Console.WriteLine("no translations at all, and no --languages given. nothing to put in the columns.");
+                    return;
+                }
+
+                var headers = BuildHeaders(locales);
+
+                Console.WriteLine($"exporting {achievements.Count} achievement(s) in {locales.Count} language(s) into {Path.GetFullPath(path)}...");
+
+                var rows = new List<List<string>>();
+
+                // the console orders achievements by sort rank, keep the csv in the order the author sees
+                var ordered = achievements
+                    .OrderBy(a => details[a]?.SortRank ?? int.MaxValue)
+                    .ThenBy(a => a.Id, StringComparer.Ordinal);
+
+                foreach (var achievement in ordered)
+                {
+                    var detail = details[achievement];
+
+                    if (detail is null)
+                    {
+                        Console.WriteLine($"Warning: {achievement.Id} has neither a draft nor a published version, exported as an empty row.");
+                        rows.Add([achievement.Id ?? "", .. locales.SelectMany(_ => new[] { "", "" })]);
+                        continue;
+                    }
+
+                    var row = new List<string> { achievement.Id ?? "" };
+
+                    foreach (var locale in locales)
+                    {
+                        row.Add(detail.Name.ValueFor(locale));
+                        row.Add(detail.Description.ValueFor(locale));
+                    }
+
+                    if (verbose)
+                    {
+                        var filled = locales.Count(l => !string.IsNullOrWhiteSpace(detail.Name.ValueFor(l)));
+                        Console.WriteLine($"   {achievement.Id}: \"{detail.Name.ValueFor(locales[0])}\", {filled} of {locales.Count} language(s)");
+                    }
+
+                    rows.Add(row);
+                }
+
+                await CommandLinesUtils.SaveCsv(path, headers, rows);
+
+                Console.WriteLine();
+                Console.WriteLine($"written: {Path.GetFullPath(path)}");
+                Console.WriteLine($"{rows.Count} achievement(s), {locales.Count} language(s): {string.Join(", ", locales)}");
+
+                PrintCoverage(details.Values, locales);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                Console.WriteLine();
+                Console.WriteLine("if this is a 403, enable the 'Google Play Game Services Publishing API' in your Cloud project");
+            }
+        }
+
+        /// <summary>
+        /// The columns of the csv, in order: whatever is already translated, plus whatever --languages
+        /// asks for. A language that exists nowhere yet gets an empty column pair, which is the whole
+        /// point - that empty column is what the translator fills in.
+        /// </summary>
+        List<string> ResolveLocales(IEnumerable<GamesConfig.Data.AchievementConfigurationDetail?> details)
+        {
+            var found = details
+                .SelectMany(d => d?.Name.Locales().Concat(d.Description.Locales()) ?? [])
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(l => l, StringComparer.Ordinal)
+                .ToList();
+
+            var requested = Extensions.ParseIapFilter(Args.TryGetOption("--languages", ""))
+                .OrderBy(l => l, StringComparer.Ordinal);
+
+            var locales = new List<string>();
+
+            // the default language leads, so the source text a translator works from is the first pair
+            var defaultLanguage = Config.DefaultLanguageCode;
+            if (!string.IsNullOrWhiteSpace(defaultLanguage)
+                && found.Concat(requested).Contains(defaultLanguage, StringComparer.OrdinalIgnoreCase))
+            {
+                locales.Add(found.Concat(requested).First(l => string.Equals(l, defaultLanguage, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            foreach (var locale in found.Concat(requested))
+            {
+                if (!locales.Contains(locale, StringComparer.OrdinalIgnoreCase))
+                    locales.Add(locale);
+            }
+
+            return locales;
+        }
+
+        static List<string> BuildHeaders(List<string> locales)
+        {
+            var headers = new List<string> { IdHeader };
+
+            foreach (var locale in locales)
+            {
+                headers.Add($"name[{locale}]");
+                headers.Add($"description[{locale}]");
+            }
+
+            return headers;
+        }
+
+        /// <summary>
+        /// How much of each language is actually filled in. Without this the csv looks complete the
+        /// moment it has columns, and a half translated language is exactly the thing worth seeing.
+        /// </summary>
+        static void PrintCoverage(IEnumerable<GamesConfig.Data.AchievementConfigurationDetail?> details, List<string> locales)
+        {
+            var all = details.ToList();
+
+            Console.WriteLine();
+            Console.WriteLine("filled in:");
+
+            foreach (var locale in locales)
+            {
+                var names = all.Count(d => !string.IsNullOrWhiteSpace(d?.Name.ValueFor(locale)));
+                var descriptions = all.Count(d => !string.IsNullOrWhiteSpace(d?.Description.ValueFor(locale)));
+
+                var note = names == 0 && descriptions == 0 ? "  <- empty, ready to translate" : "";
+                Console.WriteLine($"        {locale,-10} {names,4} name(s), {descriptions,4} description(s) of {all.Count}{note}");
+            }
+        }
+
+        public override string Name => "export-achievements";
+
+        public override string Description
+            => "Exports every Play Games Services achievement into a csv, one column pair per language, ready to be translated in a spreadsheet.";
+
+        public override void PrintHelp()
+        {
+            Console.WriteLine("export-achievements [--achievements <path-to-achievement-definitions.csv>] [--languages <code[,code...]>] [--games-project <id>] [-v]");
+            Console.WriteLine();
+            Console.WriteLine();
+
+            Console.WriteLine("description:");
+            CommandLinesUtils.PrintDescription(Description);
+            CommandLinesUtils.PrintDescription($"Columns: {IdHeader}, then 'name[<locale>]' and 'description[<locale>]' for every language. Google never machine translates achievements the way it does the store page, so whatever is not in here is English for everyone.");
+            CommandLinesUtils.PrintDescription("By default the columns are the languages that already carry a translation. Add the ones you want to translate into with --languages, they come out as empty columns to fill.");
+            CommandLinesUtils.PrintDescription("Exported from the draft version, the one the console edits, falling back to the published one for an achievement never touched since it went live. Points, type, steps and icons are not exported and never change.");
+            CommandLinesUtils.PrintDescription("Rows are in the console's own order, by sort rank. An existing csv at the target path is overwritten.");
+
+            Console.WriteLine();
+            Console.WriteLine("options:");
+
+            CommandLinesUtils.PrintOption(
+                "--achievements <path>",
+                "Specifies path to the csv to write. If not specified, used path from global config json ('AchievementDefinitionsFilePath'), which defaults to './achievement-definitions.csv' next to it."
+            );
+            CommandLinesUtils.PrintOption(
+                "--languages <code[,code...]>",
+                "Extra languages to add as empty columns, a comma separated list of locale codes. Use the codes Play Games Services itself uses, see the 'locales' command - they are not always the ones the store page uses."
+            );
+            CommandLinesUtils.PrintOption(
+                "--games-project <id>",
+                "Play Games Services project id, shown in the console next to the game name as 'Project ID'. Default is the id from global config.json."
+            );
+            CommandLinesUtils.PrintOption(
+                "-v",
+                "Include additional verbose output"
+            );
+
+            CommandLinesUtils.PrintCommonOptions();
+        }
+    }
+}

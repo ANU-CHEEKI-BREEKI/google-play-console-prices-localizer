@@ -15,6 +15,7 @@ var commands = new CommandsCollection()
     new Command_LocalizePrices(),
     new Command_Vitals(),
     new Command_Locales(),
+    new Command_ExportAchievements(),
     new Command_Config(),
 };
 
@@ -92,6 +93,7 @@ config.DefaultPricesFilePath = Path.Combine(configDirectory, config.DefaultPrice
 config.LocalizedPricesTemplateFilePath = Path.Combine(configDirectory, config.LocalizedPricesTemplateFilePath);
 config.RoundPricesForFilePath = Path.Combine(configDirectory, config.RoundPricesForFilePath);
 config.ProductDefinitionsFilePath = Path.Combine(configDirectory, config.ProductDefinitionsFilePath);
+config.AchievementDefinitionsFilePath = Path.Combine(configDirectory, config.AchievementDefinitionsFilePath);
 config.VitalsOutputPath = Path.Combine(configDirectory, config.VitalsOutputPath);
 
 
@@ -106,6 +108,7 @@ config.RoundPricesForFilePath = args.TryGetOption("--round-prices", config.Round
 config.DefaultRegion = args.TryGetOption("--region", config.DefaultRegion);
 config.DefaultCurrency = args.TryGetOption("--currency", config.DefaultCurrency);
 config.ProductDefinitionsFilePath = args.TryGetOption("--products", config.ProductDefinitionsFilePath);
+config.AchievementDefinitionsFilePath = args.TryGetOption("--achievements", config.AchievementDefinitionsFilePath);
 config.DefaultLanguageCode = args.TryGetOption("--language", config.DefaultLanguageCode);
 config.GamesProjectId = args.TryGetOption("--games-project", config.GamesProjectId);
 config.VitalsOutputPath = args.TryGetOption("--out", config.VitalsOutputPath);
