@@ -27,7 +27,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             Console.WriteLine();
             Console.WriteLine("usage:");
             Console.WriteLine();
-            Console.WriteLine("<command> [command-options] [--config <path_to_config.json>] [config-options]");
+            Console.WriteLine("<command> [command-options] [--config <path_to_config.json> | --profile <name>] [config-options]");
             Console.WriteLine();
 
             Console.WriteLine("options:");
@@ -43,7 +43,11 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
             CommandLinesUtils.PrintOption(
                 "--config <path>",
-                "Explicitly specify the path to your global config JSON file. If not provided, the tool will try to find it in '../config.json' path. You can also provide only the path to folder that contains the 'config.json' file."
+                "Explicitly specify the path to your app config JSON file. You can also provide only the path to folder that contains the 'config.json' file."
+            );
+            CommandLinesUtils.PrintOption(
+                "--profile <name>",
+                "Use the config registered under this name, see the 'config' command. When neither --config nor --profile is given, the current profile is used, and if there is none, '../config.json'."
             );
 
             CommandLinesUtils.PrintOption(

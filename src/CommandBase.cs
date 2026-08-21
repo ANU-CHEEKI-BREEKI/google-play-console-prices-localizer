@@ -26,6 +26,12 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         /// Google APIs the command talks to. Only requested services are created,
         /// so a command never asks the user to grant scopes it does not need.
         /// </summary>
+        /// <summary>
+        /// whether the command needs an app config at all. Offline commands like 'config'
+        /// run before any config is located and before any sign-in.
+        /// </summary>
+        public virtual bool NeedsConfig => true;
+
         public virtual bool NeedsAndroidPublisher => true;
         public virtual bool NeedsPlayDeveloperReporting => false;
 

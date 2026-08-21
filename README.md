@@ -102,6 +102,28 @@ Then download the **`Client secrets`** of the created OAuth desktop client. This
 
 ---
 
+### Profiles: never type `--config` again
+
+The app configs live outside of this (public) repo, so every command used to need
+`--config <path>`. Register the path once under a name instead:
+
+    dotnet run -- config add titan-souls ../apps-configs/titan-souls
+    dotnet run -- config add island-raid ../apps-configs/island-raid
+
+The first profile you add becomes the current one, so from now on plain `dotnet run -- list`
+just works. To switch:
+
+    dotnet run -- config use island-raid
+    dotnet run -- config list
+
+    dotnet run -- list --profile titan-souls     # one-off, current profile stays
+
+Profiles are stored in `~/.config/gps-iap/profiles.json`, the same way `gcloud` or `gh` keep
+theirs. The config is picked in this order: `--config <path>`, `--profile <name>`, the current
+profile, and finally `../config.json`.
+
+---
+
 ### A couple more commands
 
 `list [-l]`

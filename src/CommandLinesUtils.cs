@@ -254,7 +254,8 @@ public static class CommandLinesUtils
     {
         Console.WriteLine();
         Console.WriteLine("common options (accepted by every command):");
-        PrintOption("--config <path>", "Path to the global config json, or to the folder that contains it. Default is '../config.json'.");
+        PrintOption("--config <path>", "Path to the app config json, or to the folder that contains it. Wins over any profile.");
+        PrintOption("--profile <name>", "Use this profile's config for this run only. See 'config --help'. Without --config and --profile the current profile is used, then '../config.json'.");
         PrintOption("--package <package>", "App package name. Overrides the global config.");
         PrintOption("--credentials <path>", "Path to the OAuth client credentials json. Overrides the global config.");
         PrintOption("--region <region>", "Region whose price is shown as the default one. Default is US, or the region from the global config.");
