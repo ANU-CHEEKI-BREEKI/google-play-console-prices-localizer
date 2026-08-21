@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Text;
 using Google;
@@ -185,107 +186,147 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                && api.HttpStatusCode < HttpStatusCode.InternalServerError
                && api.HttpStatusCode != HttpStatusCode.TooManyRequests;
 
-        public static async Task SendBatchedWithRetryAsync(this IList<OneTimeProduct> products, AndroidPublisherService service, string package, int maxRetries = 5)
+        /// <summary>
+        /// the SDK ships no constants for these enums, these are the REST values
+        /// </summary>
+        public const string PurchaseOptionActive = "ACTIVE";
+        public const string LatencyTolerant = "PRODUCT_UPDATE_LATENCY_TOLERANCE_LATENCY_TOLERANT";
+
+        /// <summary>
+        /// the single purchase option this tool manages on a product, or null when there is none
+        /// </summary>
+        public static OneTimeProductPurchaseOption? LegacyOption(this OneTimeProduct product)
+            => product.PurchaseOptions?.FirstOrDefault(po => po.BuyOption?.LegacyCompatible == true);
+
+        /// <summary>
+        /// Activates purchase options, up to 100 per request, which is the API limit.
+        /// Returns false if any batch failed after the retries.
+        /// </summary>
+        public static async Task<bool> ActivateAsync(this AndroidPublisherService service, string package, IList<(string ProductId, string PurchaseOptionId)> options)
         {
-            // Update all products using BatchUpdate
-            var updateRequests = products.Select(product => new UpdateOneTimeProductRequest
+            var allOk = true;
+            var batches = options.Chunk(100).ToList();
+
+            for (var i = 0; i < batches.Count; i++)
+            {
+                var batch = batches[i];
+                var label = batches.Count == 1 ? $"{batch.Length} purchase option(s)" : $"batch {i + 1}/{batches.Count} ({batch.Length} purchase option(s))";
+
+                Console.WriteLine($"   -> Activating {label}...");
+
+                var body = new BatchUpdatePurchaseOptionStatesRequest
+                {
+                    Requests = batch.Select(o => new UpdatePurchaseOptionStateRequest
+                    {
+                        ActivatePurchaseOptionRequest = new ActivatePurchaseOptionRequest
+                        {
+                            PackageName = package,
+                            ProductId = o.ProductId,
+                            PurchaseOptionId = o.PurchaseOptionId,
+                            LatencyTolerance = LatencyTolerant,
+                        }
+                    }).ToList()
+                };
+
+                // the product id in the path is required but every request carries its own,
+                // so the first one of the batch is as good as any
+                var ok = await ExecuteWithRetryAsync(
+                    () => service.Monetization.Onetimeproducts.PurchaseOptions
+                        .BatchUpdateStates(body, package, batch[0].ProductId)
+                        .ExecuteAsync(),
+                    label
+                );
+
+                allOk &= ok;
+            }
+
+            return allOk;
+        }
+
+        /// <summary>
+        /// Sends price updates the way Google recommends for bulk changes: every product in one
+        /// batchUpdate, LATENCY_TOLERANT. Measured on this API: a single latency-sensitive patch
+        /// with the full region list does not answer within five minutes, the tolerant batch with
+        /// the same payload answers in about two. The price is that the change can take up to
+        /// 24 hours to reach devices; pass sensitive=true to use the slow path when that matters.
+        /// </summary>
+        public static async Task<bool> SendWithRetryAsync(this IList<OneTimeProduct> products, AndroidPublisherService service, string package, bool sensitive = false)
+        {
+            if (products.Count == 0)
+                return true;
+
+            var requests = products.Select(product => new UpdateOneTimeProductRequest
             {
                 OneTimeProduct = product,
                 UpdateMask = "purchaseOptions",
-                RegionsVersion = product.RegionsVersion
+                RegionsVersion = product.RegionsVersion,
+                LatencyTolerance = sensitive ? null : LatencyTolerant,
             }).ToList();
 
-            // we have TIMEOUT EXCEPTIONS
-            // so lets update one IAP per request
+            var allOk = true;
+            var batches = requests.Chunk(100).ToList();
 
-            var count = updateRequests.Count();
-            var q = 0;
-            foreach (var updateRequest in updateRequests)
+            for (var i = 0; i < batches.Count; i++)
             {
-                q++;
-                Console.WriteLine($"Sending BatchUpdate {q}/{count} for {updateRequest.OneTimeProduct.ProductId}...");
+                var batch = batches[i];
+                var label = batches.Count == 1 ? $"{batch.Length} product(s)" : $"batch {i + 1}/{batches.Count} ({batch.Length} product(s))";
 
-                var batchUpdateRequest = new BatchUpdateOneTimeProductsRequest
-                {
-                    Requests = [updateRequest]
-                };
+                Console.WriteLine($"   -> Sending {label} in one request ({(sensitive ? "latency sensitive" : "latency tolerant")})...");
+                if (!sensitive)
+                    Console.WriteLine("      Google takes about two minutes to write a full region list, this is normal.");
 
-                // also leta add retry logic
-                // if a request fails (timeout or glitch), we try 3 times before giving up
-                var currentRetry = 0;
-                var success = false;
+                var body = new BatchUpdateOneTimeProductsRequest { Requests = batch };
 
-                while (currentRetry < maxRetries && !success)
-                {
-                    try
+                var ok = await ExecuteWithRetryAsync(
+                    () => Timed("the update request", async () =>
                     {
-                        var batchRequest = service!.Monetization.Onetimeproducts.BatchUpdate(batchUpdateRequest, package);
-                        await batchRequest.ExecuteAsync();
-                        success = true; // It worked! Exit the retry loop
-                    }
-                    catch (Exception ex)
-                    {
-                        currentRetry++;
-                        Console.WriteLine($"  [Attempt {currentRetry}/{maxRetries}] Failed: {ex.Message}");
+                        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+                        await service.Monetization.Onetimeproducts.BatchUpdate(body, package).ExecuteAsync(timeout.Token);
+                    }),
+                    label
+                );
 
-                        if (currentRetry >= maxRetries)
-                        {
-                            Console.WriteLine($"  >>> SKIPPING {updateRequest.OneTimeProduct.ProductId} after {maxRetries} failed attempts.");
-                        }
-                        else
-                        {
-                            Console.WriteLine("  Waiting 5 seconds before retrying...");
-                            await Task.Delay(TimeSpan.FromSeconds(5));
-                        }
-                    }
-                }
+                allOk &= ok;
             }
+
+            return allOk;
         }
 
-        public static async Task SendWithRetryAsync(this IList<OneTimeProduct> products, AndroidPublisherService service, string package, int maxRetries = 5)
+        /// <summary>
+        /// a silent console is indistinguishable from a hang, this says how long we have been waiting
+        /// </summary>
+        public static async Task<T> Timed<T>(string label, Func<Task<T>> action)
         {
-            // batch requests works slow
-            // and we any way updating each product one by one
-            // MAYBE will be faster to use Patch call instead
+            var watch = Stopwatch.StartNew();
+            using var finished = new CancellationTokenSource();
 
-            var count = products.Count;
-            var q = 0;
-            foreach (var product in products)
+            var heartbeat = Task.Run(async () =>
             {
-                q++;
-                Console.WriteLine($"Sending Patch {q}/{count} for {product.ProductId}...");
-
-                var currentRetry = 0;
-                var success = false;
-
-                while (currentRetry < maxRetries && !success)
+                while (!finished.IsCancellationRequested)
                 {
-                    try
-                    {
-                        var patchRequest = service!.Monetization.Onetimeproducts.Patch(product, package, product.ProductId);
-                        patchRequest.RegionsVersionVersion = product.RegionsVersion.Version;
-                        patchRequest.UpdateMask = "purchaseOptions";
-                        await patchRequest.ExecuteAsync();
-                        success = true; // It worked! Exit the retry loop
-                    }
-                    catch (Exception ex)
-                    {
-                        currentRetry++;
-                        Console.WriteLine($"  [Attempt {currentRetry}/{maxRetries}] Failed: {ex.Message}");
+                    try { await Task.Delay(TimeSpan.FromSeconds(10), finished.Token); }
+                    catch (OperationCanceledException) { return; }
 
-                        if (currentRetry >= maxRetries)
-                        {
-                            Console.WriteLine($"  >>> SKIPPING {product.ProductId} after {maxRetries} failed attempts.");
-                        }
-                        else
-                        {
-                            Console.WriteLine("  Waiting 5 seconds before retrying...");
-                            await Task.Delay(TimeSpan.FromSeconds(5));
-                        }
-                    }
+                    Console.WriteLine($"      still waiting for {label}... {watch.Elapsed.TotalSeconds:0}s");
                 }
+            });
+
+            try
+            {
+                var result = await action();
+                Console.WriteLine($"      {label} took {watch.Elapsed.TotalSeconds:0.0}s");
+                return result;
+            }
+            finally
+            {
+                finished.Cancel();
+                await heartbeat;
             }
         }
+
+        public static Task Timed(string label, Func<Task> action)
+            => Timed(label, async () => { await action(); return true; });
+
     }
 }
 

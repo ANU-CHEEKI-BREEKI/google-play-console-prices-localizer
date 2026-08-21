@@ -116,7 +116,9 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                 Console.WriteLine("Sending IAP to Google Play Console...");
 
-                await products.SendWithRetryAsync(Service, Package);
+                var ok = await products.SendWithRetryAsync(Service, Package, sensitive: Args.HasFlag("--sensitive"));
+                if (!ok)
+                    Console.WriteLine("some products were NOT updated, see the errors above.");
 
                 if (verbose)
                 {
@@ -142,7 +144,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("restore [--prices <path-to-default-prices.json>] [--iap <id[,id...]>] [-v] [-l]");
+            Console.WriteLine("restore [--prices <path-to-default-prices.json>] [--iap <id[,id...]>] [--sensitive] [-v] [-l]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -159,6 +161,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintOption(
                 CommandLinesUtils.IapOptionName,
                 CommandLinesUtils.IapOptionDescription
+            );
+            CommandLinesUtils.PrintOption(
+                "--sensitive",
+                "Send the update as latency sensitive, so it reaches devices within minutes instead of up to 24 hours. Much slower on Google's side, a full region list may not finish within the timeout."
             );
             CommandLinesUtils.PrintOption(
                 "-v",

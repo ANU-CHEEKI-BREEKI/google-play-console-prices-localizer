@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Google.Apis.AndroidPublisher.v3.Data;
@@ -15,9 +14,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
     /// </summary>
     public class Command_CreateIaps : CommandBase
     {
-        /// <summary>the SDK ships no constants for these enums, these are the REST values</summary>
+        /// <summary>the SDK ships no constants for this enum, this is the REST value</summary>
         private const string Available = "AVAILABLE";
-        private const string LatencyTolerant = "PRODUCT_UPDATE_LATENCY_TOLERANCE_LATENCY_TOLERANT";
 
         /// <summary>every created product gets this single backward compatible purchase option</summary>
         private const string PurchaseOptionId = "default";
@@ -44,6 +42,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             {
                 var verbose = Args.HasFlag("-v");
                 var dryRun = Args.HasFlag("-n") || Args.HasFlag("--dry-run");
+                var activate = !Args.HasFlag("--no-activate");
 
                 if (string.IsNullOrWhiteSpace(Package))
                 {
@@ -67,7 +66,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                 Console.WriteLine("receiving IAP list...");
 
-                var existing = await Timed("the IAP list", () => Service!.Monetization.Onetimeproducts.ListAllAsync(Package));
+                var existing = await Extensions.Timed("the IAP list", () => Service!.Monetization.Onetimeproducts.ListAllAsync(Package));
                 var existingIds = new HashSet<string>(
                     existing.Where(p => p.ProductId is not null).Select(p => p.ProductId!),
                     StringComparer.Ordinal
@@ -144,7 +143,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                         UpdateMask = "listings,purchaseOptions",
 
                         RegionsVersion = new RegionsVersion { Version = regionsVersion },
-                        LatencyTolerance = LatencyTolerant,
+                        LatencyTolerance = Extensions.LatencyTolerant,
                     });
                 }
 
@@ -165,7 +164,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     Console.WriteLine("      Google takes about two minutes to write a full region list, this is normal.");
 
                     var ok = await Extensions.ExecuteWithRetryAsync(
-                        () => Timed("the create request", async () =>
+                        () => Extensions.Timed("the create request", async () =>
                         {
                             using var timeout = new CancellationTokenSource(RequestTimeout);
                             await Service!.Monetization.Onetimeproducts.BatchUpdate(body, Package).ExecuteAsync(timeout.Token);
@@ -179,48 +178,35 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                         failed.AddRange(requests.Select(r => r.OneTimeProduct.ProductId));
                 }
 
+                // a created product is a draft nobody can buy until its purchase option is active
+                var notActivated = new List<string>();
+
+                if (activate && created.Count > 0)
+                {
+                    var options = created.Select(id => (id, PurchaseOptionId)).ToList();
+
+                    if (!await Service!.ActivateAsync(Package, options))
+                        notActivated.AddRange(created);
+                }
+
                 PrintSummary(created, skipped, failed, dryRun);
+
+                if (notActivated.Count > 0)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("activation failed, the products exist but are still drafts. run 'activate' to try again:");
+                    Console.WriteLine($"   activate --iap {string.Join(",", notActivated)}");
+                }
+                else if (!activate && created.Count > 0 && !dryRun)
+                {
+                    Console.WriteLine("the products are drafts (--no-activate). run 'activate' when they are ready to be sold.");
+                }
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex);
             }
         }
-
-        /// <summary>
-        /// a silent console is indistinguishable from a hang, this says how long we have been waiting
-        /// </summary>
-        private static async Task<T> Timed<T>(string label, Func<Task<T>> action)
-        {
-            var watch = Stopwatch.StartNew();
-            using var finished = new CancellationTokenSource();
-
-            var heartbeat = Task.Run(async () =>
-            {
-                while (!finished.IsCancellationRequested)
-                {
-                    try { await Task.Delay(TimeSpan.FromSeconds(10), finished.Token); }
-                    catch (OperationCanceledException) { return; }
-
-                    Console.WriteLine($"      still waiting for {label}... {watch.Elapsed.TotalSeconds:0}s");
-                }
-            });
-
-            try
-            {
-                var result = await action();
-                Console.WriteLine($"      {label} took {watch.Elapsed.TotalSeconds:0.0}s");
-                return result;
-            }
-            finally
-            {
-                finished.Cancel();
-                await heartbeat;
-            }
-        }
-
-        private static Task Timed(string label, Func<Task> action)
-            => Timed(label, async () => { await action(); return true; });
 
         // ---------------------------------------------------------------- csv
 
@@ -348,7 +334,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             var units = (long)Math.Floor(price);
             var nanos = (int)((price - units) * 1_000_000_000);
 
-            var response = await Timed($"the exchange rates for {price.ToString("0.00", CultureInfo.InvariantCulture)} {currency}", () =>
+            var response = await Extensions.Timed($"the exchange rates for {price.ToString("0.00", CultureInfo.InvariantCulture)} {currency}", () =>
                 Service!.Monetization
                     .ConvertRegionPrices(new ConvertRegionPricesRequest
                     {
@@ -522,7 +508,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("create-iaps [--products <path-to-product-definitions.csv>] [--language <code>] [--iap <id[,id...]>] [-n|--dry-run] [-v]");
+            Console.WriteLine("create-iaps [--products <path-to-product-definitions.csv>] [--language <code>] [--iap <id[,id...]>] [--no-activate] [-n|--dry-run] [-v]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -532,6 +518,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintDescription("All new products go to Google in a single batch request, the way Google recommends for catalog creation (allowMissing + LATENCY_TOLERANT). It counts as one call against the hourly quota. The only trade-off is that the new products may take up to 24 hours to reach devices, which for a product nobody has bought yet does not matter.");
             CommandLinesUtils.PrintDescription("Prices come from Google's exchange rates applied to the 'default_price' column, and a whole price is lowered by 0.01 first, so no country ends up with a rounded price. The region list and availability are copied from a product you already have. Run 'localize' afterwards to apply your percentage template.");
             CommandLinesUtils.PrintDescription("Every created product gets one store listing, in the language from the config, built from the 'title' and 'description' columns, and a single backward compatible purchase option. The tax category is not set, the products get the Play Console default.");
+            CommandLinesUtils.PrintDescription("Created products are activated right away, so they can be bought. Pass --no-activate to leave them as drafts and run 'activate' later.");
             CommandLinesUtils.PrintDescription("The csv separator is detected automatically, ';', ',' and tab are supported. Run 'export-iaps' to get a csv of your existing products to add new rows to.");
 
             Console.WriteLine();
@@ -548,6 +535,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintOption(
                 CommandLinesUtils.IapOptionName,
                 CommandLinesUtils.IapOptionDescription
+            );
+            CommandLinesUtils.PrintOption(
+                "--no-activate",
+                "Leave the created products as drafts instead of activating them."
             );
             CommandLinesUtils.PrintOption(
                 "-n, --dry-run",

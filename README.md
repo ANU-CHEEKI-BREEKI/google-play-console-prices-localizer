@@ -165,8 +165,14 @@ added in the Play Console.
 Add a row per new product, then:
 
     dotnet run -- create-iaps -n     # dry run, shows what would be created
-    dotnet run -- create-iaps        # for real
-    dotnet run -- localize           # apply the percentage template to them
+    dotnet run -- create-iaps        # for real, the products are activated right away
+    dotnet run -- localize --iap new_one,new_two   # apply the percentage template to them
+
+A freshly created product is a draft nobody can buy, so `create-iaps` activates it on its own
+(`--no-activate` to skip that). For products created elsewhere, or after a failed activation:
+
+    dotnet run -- activate           # everything that is not active yet
+    dotnet run -- activate --iap new_one,new_two
 
 Products that already exist are skipped and **never** modified, so running `create-iaps` twice is
 safe and the file can stay as a full snapshot of your catalog. Existing prices are only ever touched

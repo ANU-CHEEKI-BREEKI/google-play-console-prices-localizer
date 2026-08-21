@@ -9,6 +9,7 @@ var commands = new CommandsCollection()
     new Command_List(),
     new Command_ExportIaps(),
     new Command_CreateIaps(),
+    new Command_Activate(),
     new Command_Restore(),
     new Command_LocalizePrices(),
     new Command_Vitals(),
