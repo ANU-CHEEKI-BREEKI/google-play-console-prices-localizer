@@ -121,11 +121,17 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             => [key, .. locales.Select(bundle.ValueFor)];
 
         /// <summary>
-        /// The columns of the csv, in order. The source locales lead, in exactly the order they are
-        /// configured, because a translation service reads the leading columns as its context and the
-        /// order decides which one is the primary source. Everything already translated follows,
-        /// then whatever --languages asks for.
-        /// A language nobody has touched yet still gets a column, empty - that empty column is the work.
+        /// The columns of the csv. Every locale the tool can see gets one - the source locales only
+        /// decide what comes first, they never narrow anything down.
+        ///
+        /// Order: the source locales, in exactly the order they are configured, because a translation
+        /// service reads the leading columns as its context and the order decides which one is the
+        /// primary source. Then everything already translated, then the configured extra locales,
+        /// then whatever --languages adds for this one run.
+        ///
+        /// The extra locales are not a nicety: Play Games Services hides a language until something is
+        /// translated into it, and the api exposes no language list at all, so a language added in the
+        /// console and still empty is invisible unless it is named.
         /// </summary>
         List<string> ResolveLocales(IEnumerable<GamesConfig.Data.AchievementConfigurationDetail?> details)
         {
@@ -144,7 +150,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
             var locales = new List<string>();
 
-            foreach (var locale in leading.Concat(found).Concat(requested))
+            foreach (var locale in leading.Concat(found).Concat(Config.Locales).Concat(requested))
             {
                 if (string.IsNullOrWhiteSpace(locale))
                     continue;
@@ -181,7 +187,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("export-achievements [--achievements <path-to-achievement-definitions.csv>] [--source-locales <code[,code...]>] [--languages <code[,code...]>] [--games-project <id>] [-v]");
+            Console.WriteLine("export-achievements [--achievements <path-to-achievement-definitions.csv>] [--source-locales <code[,code...]>] [--locales <code[,code...]>] [--languages <code[,code...]>] [--games-project <id>] [-v]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -189,8 +195,9 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintDescription(Description);
             CommandLinesUtils.PrintDescription($"Columns: '{KeyHeader}', then one column per language. Every achievement contributes two rows, '<achievement_id>{NameSuffix}' and '<achievement_id>{DescriptionSuffix}', because a translation service wants one string per row.");
             CommandLinesUtils.PrintDescription("Google never machine translates achievements the way it does the store page, so whatever is not in here is English for everyone.");
-            CommandLinesUtils.PrintDescription("Column order: the source locales first, in exactly the order they are configured, then everything already translated, then whatever --languages asks for. The leading columns are what a translation service reads as its context, so 'en-US, uk, ru' gives it english as the source and ukrainian as the second opinion.");
-            CommandLinesUtils.PrintDescription("A language nobody has touched yet still gets a column, empty. Set them once in 'SourceLocales', or pass them per run with --languages.");
+            CommandLinesUtils.PrintDescription("Every language the tool can see gets a column. The source locales only decide what comes first, they never narrow anything down: source locales, then everything already translated, then the extra locales, then whatever --languages adds for this run.");
+            CommandLinesUtils.PrintDescription("The leading columns are what a translation service reads as its context, so 'en-US, uk, ru' gives it english as the source and ukrainian as the second opinion.");
+            CommandLinesUtils.PrintDescription("Play Games Services hides a language until something is translated into it, and its api has no language list at all. So a language you added in the console and have not filled in yet is invisible here until you name it in 'Locales' or --languages. That empty column is the work.");
             CommandLinesUtils.PrintDescription("Exported from the draft version, the one the console edits, falling back to the published one for an achievement never touched since it went live. Points, type, steps and icons are not exported and never change.");
             CommandLinesUtils.PrintDescription("Rows are in the console's own order, by sort rank. An existing csv at the target path is overwritten.");
 
@@ -206,8 +213,12 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "Locales that lead the columns, in this exact order, always exported even when empty. Default is the list from global config.json ('SourceLocales'), and without one the single 'DefaultLanguageCode' leads."
             );
             CommandLinesUtils.PrintOption(
+                "--locales <code[,code...]>",
+                "Every locale to produce a column for, on top of whatever is already translated. Default is the list from global config.json ('Locales'). This is where a language that exists in the console but is still empty has to be named."
+            );
+            CommandLinesUtils.PrintOption(
                 "--languages <code[,code...]>",
-                "Extra languages to add as empty columns, a comma separated list of locale codes. Use the codes Play Games Services itself uses, see the 'locales' command - they are not always the ones the store page uses."
+                "Same as --locales but meant for one run, appended last. Use the codes Play Games Services itself uses, see the 'locales' command - they are not always the ones the store page uses."
             );
             CommandLinesUtils.PrintOption(
                 "--games-project <id>",

@@ -321,16 +321,18 @@ achievement and one language at a time, which is why nobody ever finishes.
     exporting 73 achievement(s) in 3 language(s) into .../achievement-definitions.csv...
 
     written: .../achievement-definitions.csv
-    146 key(s) from 73 achievement(s), 3 language(s): en-US, uk, ru
+    146 key(s) from 73 achievement(s), 5 language(s): en-US, uk, ru, es-ES, pt-PT
 
     filled in:
             en-US       146 of 146 key(s)
             uk            0 of 146 key(s)  <- empty, ready to translate
             ru            0 of 146 key(s)  <- empty, ready to translate
+            es-ES         0 of 146 key(s)  <- empty, ready to translate
+            pt-PT         0 of 146 key(s)  <- empty, ready to translate
 
 The csv is **one row per key, one column per language** - the layout every translation service reads:
 
-    key                                 en-US                       uk      ru
+    key                                 en-US                       uk  ru  es-ES  pt-PT
     CgkIj8z_jpUZEAIQAQ.name             Slayer of Fury
     CgkIj8z_jpUZEAIQAQ.description      Defeat the Minotaur - ...
 
@@ -339,20 +341,28 @@ and never contain a dot, so the suffix needs no escaping.
 
 Open it in a spreadsheet or hand it to your translation service, fill the empty columns, done.
 
-#### Column order
+#### Which columns, and in what order
 
-The **order** of the columns is not cosmetic. A translation service reads the leading columns as the
-context it translates from, so which language comes first decides what it sees. Set it once in
-`config.json`:
+Every language the tool can see gets a column. Two config lists shape that:
 
-    "SourceLocales": ["en-US", "uk", "ru"]
+    "SourceLocales": ["en-US", "uk", "ru"],
+    "Locales":       ["es-ES", "pt-PT"]
 
-English is the source, ukrainian is the second opinion, russian is filled by copying from the ukrainian
-one. These locales lead the columns in exactly this order and are **always exported, even when empty**.
-Everything already translated follows, sorted, and then whatever `--languages` adds for one run.
+**`SourceLocales` only decides what comes first. It never narrows anything down.** A translation service
+reads the leading columns as the context it translates from, so the order decides what it sees: english is
+the source, ukrainian is the second opinion, russian is filled by copying from the ukrainian one.
 
-Without `SourceLocales` the single `DefaultLanguageCode` leads and the rest is whatever already exists.
-`--source-locales en-US,uk,ru` overrides the config for one run.
+**`Locales` is there because of a Play Games Services quirk.** PGS hides a language until something is
+actually translated into it, and its API exposes no language list at all. So a language you added in the
+console and have not filled in yet is *invisible* - and an invisible language gets no column, which is
+exactly the column you need. Naming it in `Locales` brings it back as an empty column.
+
+Full order: `SourceLocales`, then everything already translated (sorted), then `Locales`, then anything
+`--languages` adds for one run. Duplicates collapse, so a locale in two lists still appears once, in its
+earliest position.
+
+Without `SourceLocales` the single `DefaultLanguageCode` leads. `--source-locales` and `--locales`
+override either config list for one run.
 
 Use the codes **Play Games Services** uses, not the ones from your store page - run `locales` first, they
 are routinely different (`es-ES` against `es-419`, `pt-PT` against `pt-BR`).

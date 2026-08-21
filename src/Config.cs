@@ -35,6 +35,14 @@ public class Config
     public List<string> SourceLocales { get; set; } = [];
 
     /// <summary>
+    /// every locale the exports produce a column for, on top of whatever is already translated.
+    /// Play Games Services hides a language until something is actually translated into it - the api
+    /// has no resource for the language list at all - so a language added in the console and still
+    /// empty is invisible until it is named here. Empty means export only what is found
+    /// </summary>
+    public List<string> Locales { get; set; } = [];
+
+    /// <summary>
     /// numeric id of the Play Games Services project, the one the console shows next to the game name
     /// as "Project ID". Not the package name: one games project can be shared by several apps,
     /// and the games configuration API addresses games by this id only

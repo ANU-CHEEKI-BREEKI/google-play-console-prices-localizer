@@ -115,6 +115,10 @@ var sourceLocales = args.TryGetOption("--source-locales", "");
 if (!string.IsNullOrWhiteSpace(sourceLocales))
     config.SourceLocales = [.. sourceLocales.Split([',', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
+var locales = args.TryGetOption("--locales", "");
+if (!string.IsNullOrWhiteSpace(locales))
+    config.Locales = [.. locales.Split([',', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
 config.GamesProjectId = args.TryGetOption("--games-project", config.GamesProjectId);
 config.VitalsOutputPath = args.TryGetOption("--out", config.VitalsOutputPath);
 
