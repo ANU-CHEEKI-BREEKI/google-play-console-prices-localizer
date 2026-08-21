@@ -482,3 +482,18 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Google API credentials and anything that looks like them.
+# The tool reads these from outside the repo, and one 'git add .' is all it takes
+*credential*.json
+*client_secret*.json
+*service_account*.json
+*oauth*.json
+AuthKey_*.p8
+*.p8
+*.pem
+*.key
+
+# App configs live outside the repo, but not everyone keeps them there
+config.json
+apps-configs/

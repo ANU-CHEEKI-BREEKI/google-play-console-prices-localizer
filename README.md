@@ -263,7 +263,7 @@ Google keeps **three independent language lists** for one game and never syncs t
 side by side and names what is missing from where:
 
     store listing:
-            en-US      default  Titan Soul: Action RPG Offline
+            en-US      default  My Game: Best Game Ever
             es-419
             uk
 
@@ -300,8 +300,8 @@ Services keeps its languages in the game details, which no API can touch - add t
 One row per key, one column per language - the layout every translation service reads:
 
     key                                 en-US                     uk
-    CgkIj8z_jpUZEAIQAQ.name             Slayer of Fury            Убивця Люті
-    CgkIj8z_jpUZEAIQAQ.description      Defeat the Minotaur...    Здолай Мінотавра...
+    CgkIAAAAAAAAAAAAAA.name             Dragon Slayer            Вбивця Драконів
+    CgkIAAAAAAAAAAAAAA.description      Defeat the dragon...    Здолай дракона...
 
 Every item contributes two rows (`.name`/`.description` for achievements, `.title`/`.description` for
 products). Achievements export from the **draft**, the copy the console edits; points, type, steps and

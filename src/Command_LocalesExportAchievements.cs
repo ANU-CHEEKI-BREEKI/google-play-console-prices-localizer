@@ -16,7 +16,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         const string KeyHeader = "key";
 
         /// <summary>
-        /// key suffixes. Achievement ids are base64url tokens like CgkIj8z_jpUZEAIQAQ and never
+        /// key suffixes. Achievement ids are base64url tokens like CgkIAAAAAAAAAAAAAA and never
         /// contain a dot, so a dot separates the id from the field without any escaping
         /// </summary>
         const string NameSuffix = ".name";
