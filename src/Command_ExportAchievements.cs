@@ -121,35 +121,34 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             => [key, .. locales.Select(bundle.ValueFor)];
 
         /// <summary>
-        /// The columns of the csv, in order: whatever is already translated, plus whatever --languages
-        /// asks for. A language that exists nowhere yet gets an empty column, which is the whole
-        /// point - that empty column is what the translator fills in.
+        /// The columns of the csv, in order. The source locales lead, in exactly the order they are
+        /// configured, because a translation service reads the leading columns as its context and the
+        /// order decides which one is the primary source. Everything already translated follows,
+        /// then whatever --languages asks for.
+        /// A language nobody has touched yet still gets a column, empty - that empty column is the work.
         /// </summary>
         List<string> ResolveLocales(IEnumerable<GamesConfig.Data.AchievementConfigurationDetail?> details)
         {
             var found = details
                 .SelectMany(d => d?.Name.Locales().Concat(d.Description.Locales()) ?? [])
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(l => l, StringComparer.Ordinal)
-                .ToList();
+                .OrderBy(l => l, StringComparer.Ordinal);
 
             var requested = Extensions.ParseIapFilter(Args.TryGetOption("--languages", ""))
                 .OrderBy(l => l, StringComparer.Ordinal);
 
-            var all = found.Concat(requested).ToList();
+            // without a configured order the single default language leads, as it did before
+            var leading = Config.SourceLocales is { Count: > 0 }
+                ? Config.SourceLocales
+                : [Config.DefaultLanguageCode];
+
             var locales = new List<string>();
 
-            // the default language leads, so the source text a translator works from is the first column
-            var defaultLanguage = Config.DefaultLanguageCode;
-            if (!string.IsNullOrWhiteSpace(defaultLanguage))
+            foreach (var locale in leading.Concat(found).Concat(requested))
             {
-                var match = all.FirstOrDefault(l => string.Equals(l, defaultLanguage, StringComparison.OrdinalIgnoreCase));
-                if (match is not null)
-                    locales.Add(match);
-            }
+                if (string.IsNullOrWhiteSpace(locale))
+                    continue;
 
-            foreach (var locale in all)
-            {
                 if (!locales.Contains(locale, StringComparer.OrdinalIgnoreCase))
                     locales.Add(locale);
             }
@@ -182,7 +181,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("export-achievements [--achievements <path-to-achievement-definitions.csv>] [--languages <code[,code...]>] [--games-project <id>] [-v]");
+            Console.WriteLine("export-achievements [--achievements <path-to-achievement-definitions.csv>] [--source-locales <code[,code...]>] [--languages <code[,code...]>] [--games-project <id>] [-v]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -190,7 +189,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintDescription(Description);
             CommandLinesUtils.PrintDescription($"Columns: '{KeyHeader}', then one column per language. Every achievement contributes two rows, '<achievement_id>{NameSuffix}' and '<achievement_id>{DescriptionSuffix}', because a translation service wants one string per row.");
             CommandLinesUtils.PrintDescription("Google never machine translates achievements the way it does the store page, so whatever is not in here is English for everyone.");
-            CommandLinesUtils.PrintDescription("By default the columns are the languages that already carry a translation. Add the ones you want to translate into with --languages, they come out as empty columns to fill.");
+            CommandLinesUtils.PrintDescription("Column order: the source locales first, in exactly the order they are configured, then everything already translated, then whatever --languages asks for. The leading columns are what a translation service reads as its context, so 'en-US, uk, ru' gives it english as the source and ukrainian as the second opinion.");
+            CommandLinesUtils.PrintDescription("A language nobody has touched yet still gets a column, empty. Set them once in 'SourceLocales', or pass them per run with --languages.");
             CommandLinesUtils.PrintDescription("Exported from the draft version, the one the console edits, falling back to the published one for an achievement never touched since it went live. Points, type, steps and icons are not exported and never change.");
             CommandLinesUtils.PrintDescription("Rows are in the console's own order, by sort rank. An existing csv at the target path is overwritten.");
 
@@ -200,6 +200,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintOption(
                 "--achievements <path>",
                 "Specifies path to the csv to write. If not specified, used path from global config json ('AchievementDefinitionsFilePath'), which defaults to './achievement-definitions.csv' next to it."
+            );
+            CommandLinesUtils.PrintOption(
+                "--source-locales <code[,code...]>",
+                "Locales that lead the columns, in this exact order, always exported even when empty. Default is the list from global config.json ('SourceLocales'), and without one the single 'DefaultLanguageCode' leads."
             );
             CommandLinesUtils.PrintOption(
                 "--languages <code[,code...]>",

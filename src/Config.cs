@@ -25,6 +25,16 @@ public class Config
     public string DefaultLanguageCode { get; set; } = "en-US";
 
     /// <summary>
+    /// locales that lead the exported columns, in exactly this order, and that are always exported
+    /// even when nothing is translated into them yet.
+    /// A translation service reads the leading columns as the context it translates from, and one
+    /// source is rarely enough - "en-US", "uk", "ru" means english is the source, ukrainian is the
+    /// second opinion and russian is filled by copying from the ukrainian one.
+    /// Everything else is appended after these, sorted. Empty falls back to DefaultLanguageCode alone
+    /// </summary>
+    public List<string> SourceLocales { get; set; } = [];
+
+    /// <summary>
     /// numeric id of the Play Games Services project, the one the console shows next to the game name
     /// as "Project ID". Not the package name: one games project can be shared by several apps,
     /// and the games configuration API addresses games by this id only

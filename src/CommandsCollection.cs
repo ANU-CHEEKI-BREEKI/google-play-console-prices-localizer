@@ -91,6 +91,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "Language of the store listing the 'export-iaps' and 'create-iaps' commands read and write. Default is en-US, or the language specified in global config.json."
             );
             CommandLinesUtils.PrintOption(
+                "--source-locales <code[,code...]>",
+                "Locales that lead the exported columns, in this exact order, and that are always exported even when empty. These are the languages a translation service reads as its context. Default is the list from global config.json ('SourceLocales')."
+            );
+            CommandLinesUtils.PrintOption(
                 "--games-project <id>",
                 "Play Games Services project id, shown in the console next to the game name. Used by the 'locales' command to read the games translations. Default is the id from global config.json."
             );

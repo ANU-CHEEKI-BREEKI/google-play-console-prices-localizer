@@ -315,23 +315,22 @@ Google machine translates your store page. It **never** touches achievements - a
 in English has 73 of them in English in every country. The console only lets you click through one
 achievement and one language at a time, which is why nobody ever finishes.
 
-    dotnet run -- export-achievements --languages uk,es-ES,pt-PT
+    dotnet run -- export-achievements
 
     receiving achievements...
-    exporting 73 achievement(s) in 4 language(s) into .../achievement-definitions.csv...
+    exporting 73 achievement(s) in 3 language(s) into .../achievement-definitions.csv...
 
     written: .../achievement-definitions.csv
-    146 key(s) from 73 achievement(s), 4 language(s): en-US, es-ES, pt-PT, uk
+    146 key(s) from 73 achievement(s), 3 language(s): en-US, uk, ru
 
     filled in:
             en-US       146 of 146 key(s)
-            es-ES         0 of 146 key(s)  <- empty, ready to translate
-            pt-PT         0 of 146 key(s)  <- empty, ready to translate
             uk            0 of 146 key(s)  <- empty, ready to translate
+            ru            0 of 146 key(s)  <- empty, ready to translate
 
 The csv is **one row per key, one column per language** - the layout every translation service reads:
 
-    key                                 en-US                       es-ES   pt-PT   uk
+    key                                 en-US                       uk      ru
     CgkIj8z_jpUZEAIQAQ.name             Slayer of Fury
     CgkIj8z_jpUZEAIQAQ.description      Defeat the Minotaur - ...
 
@@ -340,10 +339,23 @@ and never contain a dot, so the suffix needs no escaping.
 
 Open it in a spreadsheet or hand it to your translation service, fill the empty columns, done.
 
-Without `--languages` the columns are only the languages that already carry a translation. `--languages`
-is what gets you the empty columns to fill. Use the codes **Play Games Services** uses, not the ones from
-your store page - run `locales` first, they are routinely different (`es-ES` against `es-419`, `pt-PT`
-against `pt-BR`).
+#### Column order
+
+The **order** of the columns is not cosmetic. A translation service reads the leading columns as the
+context it translates from, so which language comes first decides what it sees. Set it once in
+`config.json`:
+
+    "SourceLocales": ["en-US", "uk", "ru"]
+
+English is the source, ukrainian is the second opinion, russian is filled by copying from the ukrainian
+one. These locales lead the columns in exactly this order and are **always exported, even when empty**.
+Everything already translated follows, sorted, and then whatever `--languages` adds for one run.
+
+Without `SourceLocales` the single `DefaultLanguageCode` leads and the rest is whatever already exists.
+`--source-locales en-US,uk,ru` overrides the config for one run.
+
+Use the codes **Play Games Services** uses, not the ones from your store page - run `locales` first, they
+are routinely different (`es-ES` against `es-419`, `pt-PT` against `pt-BR`).
 
 Those languages have to exist in the games project first, and no API can add them:
 
