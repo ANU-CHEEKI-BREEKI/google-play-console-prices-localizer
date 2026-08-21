@@ -245,273 +245,133 @@ Your Play Console account needs at least the *"View app information (read-only)"
 
 ### Languages: `locales`
 
-Everything about languages lives under one command, because everything about languages shares one
-`SourceLocales` and one `locales.json`:
+    locales                         # which languages exist where
+    locales export achievements     # achievement text out to a csv
+    locales export iaps             # product text out to a csv
+    locales import achievements     # the translated csv back in
+    locales import iaps
 
-    locales                         # what exists where, the default
-    locales export achievements     # achievement names and descriptions out to a csv
-    locales export iaps             # product titles and descriptions out to a csv
-    locales import achievements     # the translated csv back into Play Games Services
-    locales import iaps             # the translated csv back into the product listings
+Google auto translates your **store page** and nothing else. Achievements and product listings stay in
+whatever language you typed them in, in every country - and the product listing is what the Play purchase
+sheet shows at the moment somebody pays.
 
-Run `locales <subcommand> --help` for the options of one of them.
+Run `locales <subcommand> --help` for options.
 
-#### `locales list`
+#### `locales`
 
-    dotnet run locales
-
-Google keeps **three independent language lists** for one game, and nothing keeps them in sync:
-
-- the **store listing** - the page users see in Play
-- **Play Games Services** - achievement and leaderboard translations
-- the **one-time products** - the title and description in the purchase sheet
-
-They drift apart in ways the console never shows you. A real example from one game:
+Google keeps **three independent language lists** for one game and never syncs them. This prints all three
+side by side and names what is missing from where:
 
     store listing:
             en-US      default  Titan Soul: Action RPG Offline
             es-419
-            pt-BR
-            ru-RU
             uk
 
     play games services:
-            en-US               42 achievements, 3 leaderboards
-            es-ES               42 achievements, 3 leaderboards
-            pt-PT               42 achievements, 3 leaderboards
-            uk                  42 achievements, 3 leaderboards
+            en-US               73 achievements, 1 leaderboards
 
     one-time products:
-            en-US               12 of 12 products
+            en-US               30 of 30 products
 
     not everywhere (store listing, play games services, one-time products):
             es-419     missing from: play games services, one-time products
-            es-ES      missing from: store listing, one-time products
-            pt-BR      missing from: play games services, one-time products
-            pt-PT      missing from: store listing, one-time products
-            ru-RU      missing from: play games services, one-time products
-            uk         missing from: one-time products
+            uk         missing from: play games services, one-time products
 
-Spanish is `es-419` on the page but `es-ES` in the achievements. Portuguese is `pt-BR` against `pt-PT`.
-Russian exists on the page and nowhere else. None of that is visible from any single console screen.
-
-The command is **read only**. It creates a draft edit to read the store listing and throws it away again,
-and it never writes anything anywhere.
+They do not even agree on the codes: `es-419` on the store page against `es-ES` in the achievements,
+hebrew as `iw-IL`. Read only - it creates a draft edit to read the store listing and throws it away.
 
 **There is no `locales add`, on purpose.** For the store listing and the products a language exists
-*because* a listing for it exists, so adding a locale and writing its text are the same operation -
-nothing to add on its own. Play Games Services is the opposite problem: its languages live in the game
-details, and the configuration API has no resource for them at all. Add those by hand, once:
+*because* a listing for it exists, so adding a locale and writing its text are the same thing. Play Games
+Services keeps its languages in the game details, which no API can touch - add those by hand, once:
 
 > Play Games Services -> Setup and management -> **Configuration** -> Edit properties -> Manage translations
 
-To read the games list, the tool needs your Play Games Services **project id** - the number the console
-shows next to the game name. Put it in `config.json`:
-
-    {
-        "PackageName": "com.MyApp.Package",
-        "GamesProjectId": "864662054415"
-    }
-
-or pass `--games-project 864662054415`. Without it the games section is skipped and the other two still print.
-
-You also need to enable **`Google Play Game Services Publishing API`** in your
-[Google Cloud Console](https://console.cloud.google.com/apis/library/gamesconfiguration.googleapis.com)
-for the same project your OAuth client belongs to. No new consent though - that API is authorized by the
-same `androidpublisher` scope the IAP commands already use.
-
----
-
-#### `locales export achievements`
-
-Google machine translates your store page. It **never** touches achievements - a game with 73 of them
-in English has 73 of them in English in every country. The console only lets you click through one
-achievement and one language at a time, which is why nobody ever finishes.
+#### Exporting
 
     dotnet run -- locales export achievements
+    dotnet run -- locales export iaps
 
-    receiving achievements...
-    exporting 73 achievement(s) in 3 language(s) into .../achievement-translations.csv...
-
-    written: .../achievement-translations.csv
-    146 key(s) from 73 achievement(s), 44 language(s): en-US, uk, ru-RU, pt-PT, ... id as id-ID, ...
+    146 key(s) from 73 achievement(s), 42 language(s): en-US, uk, ru-RU, ...
 
     filled in:
             en-US       146 of 146 key(s)
             uk            0 of 146 key(s)  <- empty, ready to translate
-            ru-RU         0 of 146 key(s)  <- empty, ready to translate
-            ...
 
-The csv is **one row per key, one column per language** - the layout every translation service reads:
+One row per key, one column per language - the layout every translation service reads:
 
-    key                                 en-US                       uk  ru-RU  pt-PT
-    CgkIj8z_jpUZEAIQAQ.name             Slayer of Fury
-    CgkIj8z_jpUZEAIQAQ.description      Defeat the Minotaur - ...
+    key                                 en-US                     uk
+    CgkIj8z_jpUZEAIQAQ.name             Slayer of Fury            Убивця Люті
+    CgkIj8z_jpUZEAIQAQ.description      Defeat the Minotaur...    Здолай Мінотавра...
 
-Each achievement contributes two rows, `.name` and `.description`. Achievement ids are base64url tokens
-and never contain a dot, so the suffix needs no escaping.
+Every item contributes two rows (`.name`/`.description` for achievements, `.title`/`.description` for
+products). Achievements export from the **draft**, the copy the console edits; points, type, steps and
+icons are never exported and never change.
 
-Open it in a spreadsheet or hand it to your translation service, fill the empty columns, done.
+`locales export iaps` is not `export-iaps`. That one is the product definitions csv `create-iaps` reads
+back - prices, one language, one row per product.
 
 #### Which columns, and in what order
 
-Every language the tool can see gets a column, plus every language named in **`locales.json`**, a plain
-list next to your `config.json`:
+Two settings, both shared by all four subcommands:
 
-    [
-        "en-US",
-        "uk",
-        "de-DE",
-        { "id": "id-ID" },
-        "iw-IL"
-    ]
-
-**That file exists because of a Play Games Services quirk.** PGS hides a language until something is
-actually translated into it, and its API exposes no language list at all. So a language you added in the
-console and have not filled in yet is *invisible* - and an invisible language gets no column, which is
-exactly the column you need. The file is the list, maintained by hand, because nothing can read it for you.
-
-An entry is normally just the code. The one property object form is for when the code Google wants and the
-column name have to differ: PGS calls indonesian `id`, which a translation service happily reads as an
-*identifier* column rather than a language, so the csv says `id-ID` while the API still gets `id`.
-
-Column **order** is the file's own order, with one thing in front of it:
-
+    // config.json
     "SourceLocales": ["en-US", "uk", "ru-RU"]
 
-**`SourceLocales` only decides what comes first. It never narrows anything down.** A translation service
-reads the leading columns as the context it translates from, so the order decides what it sees: english is
-the source, ukrainian is the second opinion, russian is filled by copying from the ukrainian one.
+    // locales.json, next to it
+    [ "en-US", "uk", "de-DE", { "id": "id-ID" }, "iw-IL" ]
 
-Full order: `SourceLocales`, then everything already translated (sorted), then `locales.json`. Duplicates
-collapse, so a locale in both still appears once, in its earliest position.
+`SourceLocales` only decides **what comes first**, never what is included. A translation service reads the
+leading columns as its context, so the order decides what it sees.
 
-Without `SourceLocales` the single `DefaultLanguageCode` leads. `--source-locales` overrides it for one
-run, `--locales-file` points at a different list, and `--locales en-US,uk` replaces the list entirely for
-one run.
+`locales.json` is the list of every language you want a column for. It has to be written by hand: Play
+Games Services hides a language until something is translated into it and offers no API for the list, so a
+language you added in the console and have not filled in yet is invisible. The object form is for when the
+code Google wants and the column name must differ - PGS calls indonesian `id`, which a translation service
+reads as an *identifier* column, so the csv says `id-ID` while the API still gets `id`.
 
-Use the codes **Play Games Services** uses, not the ones from your store page - run `locales` first, they
-are routinely different (`es-ES` against `es-419`, `pt-PT` against `pt-BR`, hebrew as `iw-IL`).
+Order: `SourceLocales`, then everything already translated, then `locales.json`. Duplicates collapse.
+`--source-locales`, `--locales-file` and `--locales en-US,uk` override for one run.
 
-Those languages have to exist in the games project first, and no API can add them:
-
-> Play Games Services -> Setup and management -> **Configuration** -> Edit properties -> Manage translations
-
-The export reads the **draft** version, the one the console edits, falling back to the published one for
-an achievement never touched since it went live. Points, type, steps and icons are not exported and never
-change. Rows come out in the console's own order, by sort rank.
-
-Needs `GamesProjectId` in `config.json` and the `Google Play Game Services Publishing API` enabled -
-see [the `locales` section](#languages-locales) above.
-
----
-
-#### `locales export iaps`
-
-Same problem, different screen. Google auto translates your store page and nothing else, so a product's
-title and description stay in whatever language you typed them in - and that is the text the Play purchase
-sheet shows **at the moment somebody pays**.
-
-    dotnet run -- locales export iaps
-
-    receiving IAP list...
-    exporting 30 product(s) in 44 language(s) into .../iap-translations.csv...
-
-    written: .../iap-translations.csv
-    60 key(s) from 30 product(s), 44 language(s): en-US, uk, ru-RU, ... id as id-ID, ...
-
-    filled in:
-            en-US        60 of 60 key(s)
-            uk            0 of 60 key(s)  <- empty, ready to translate
-            ...
-
-Exactly the same csv shape as the achievements one - one row per key, one column per language - and the
-same `SourceLocales` and `locales.json` decide the columns:
-
-    key                                     en-US                   uk  ru-RU
-    pack_adventurer.title                   Adventurer Pack with Discount
-    pack_adventurer.description             Instantly get 300 Astral Shards...
-
-**Not to be confused with the top level `export-iaps`.** That one writes the product definitions csv `create-iaps` reads
-back: prices, one language, one row per product. This one is only about the text, and never touches a price.
-
-Google rejects a title over 55 characters or a description over 200, and a translation is routinely longer
-than the english it came from. Anything already over the limit is listed at the end of the run.
-
-Narrow it to a few products with `--iap pack_one,pack_two`, or write somewhere else with
-`--csv <path>` (`IapTranslationsFilePath` in `config.json`, `./iap-translations.csv` by default).
-
-#### `locales import achievements` and `locales import iaps`
-
-Same csv, the other direction:
+#### Importing
 
     dotnet run -- locales import achievements -n     # what would change, sent nowhere
     dotnet run -- locales import achievements        # for real
 
-    read 146 key(s) in 44 language(s) from .../achievement-translations.csv
-    receiving achievements...
-
     41 achievement(s) to update, 32 already up to date, 0 unknown.
 
-Four things worth knowing before running it:
+- **An empty cell means "not translated yet"** and is left alone. Nothing here can delete a translation.
+- **A value identical to what Google has is not sent.** Re-running an unchanged csv writes nothing.
+- **Column headers map back through `locales.json`**, so `id-ID` reaches the API as `id`.
+- Cells are trimmed, so a stray space is not a change of its own.
+- Both take `-n` / `--dry-run`; `locales import iaps` also takes `--iap pack_one,pack_two`.
 
-- **An empty cell means "not translated yet"** and is left alone. It never wipes a translation that is
-  already there. There is no way to delete a translation with this tool, on purpose.
-- **A value identical to what Google already has is not sent.** Re-running an unchanged csv does nothing
-  and costs one read. That is what the "already up to date" count is.
-- **Column headers are mapped back through `locales.json`**, so a column the export wrote as `id-ID`
-  still reaches the API as `id`.
-- **Cells are trimmed.** A stray leading or trailing space in the csv is not sent as a change of its own,
-  and a value that only differs from Google's by surrounding whitespace *is* rewritten without it.
+Achievements are written to the **draft**. Publish the games services configuration in the console to put
+them in front of players.
 
-**Achievement names have to be unique inside each language**, and this is checked before anything is sent:
+Products go in **one batch**. Google writes a product in its own time no matter how small the change -
+one at a time it took a quarter of an hour *each*. The patch is masked to `listings`, so prices, regions
+and purchase options are not in the request at all.
 
-    [ERROR] 1 achievement name(s) are not unique within their language.
-            Google takes them, then refuses to publish and does not say why. Nothing was sent.
+**Three things Google is unhelpful about**, all handled:
 
-            [tr-TR] "Keskin nişancı" is used by CgkIj8z_jpUZEAIQDg and CgkIj8z_jpUZEAIQDw
+- *Duplicate achievement names.* They must be unique per language. Google accepts a clash silently, then
+  blocks publishing with "there is a problem with your achievement" and never says which. Checked before
+  anything is sent, case insensitively - `Deadeye` and `Sharpshooter` came back as the same word in eight
+  languages, and in Turkish they differed only by one letter's case.
+- *A language it will not take.* One bad locale sinks the whole request. The import finds them and drops
+  them, then says what never made it. Two kinds: **not added to the games project** (a checkbox away) and
+  **not a code it knows** (`bs`, `ga` - take them out of `locales.json`). For the second kind Google
+  refuses to say which locale it means, so the import halves the list until it finds it.
+- *Half a product listing.* A listing needs both a title and a description, and Google caps them at 55 and
+  200 characters. A language that would end up incomplete or too long is dropped with a warning rather
+  than sent and rejected - a translation is routinely longer than the english it came from.
 
-Worth checking up front because Google accepts the clash without a word, and then blocks publishing with
-*"there is a problem with your achievement"* and never says which problem. Translators collapse near
-synonyms as a matter of course - `Deadeye` and `Sharpshooter` came back as the same word in eight
-languages. The comparison ignores case, which is not pedantry: Turkish came back as `Keskin Nişancı`
-against `Keskin nişancı`.
+#### Setup
 
-**Play Games Services refuses a whole request over one language it does not accept**, so the import sends
-one achievement on its own first and works out which ones those are before touching the other 72:
-
-    Google says one of the locale codes is invalid but not which one, looking for it...
-    Google refuses 'bs': not a locale code Play Games Services knows
-    Google refuses 'uk': not added to the games project
-    ...
-    dropping 43 language(s) Google refused: bs, ga, uk, ru-RU, ...
-
-Two different refusals, and the difference matters:
-
-- **"not added to the games project"** - a real code, just not turned on for this game. Fixable, see below.
-- **"not a locale code Play Games Services knows"** - Google will not even say which one it means, so the
-  import halves the list until it finds it. Take those out of your `locales.json`; PGS has no `bs` or `ga`.
-
-Whatever is left is imported normally, and the run ends by listing what was dropped and why.
-
-For achievements, only the **draft** is written - the copy the console edits. Publish the games services
-configuration in the console to put the translations in front of players. A language has to exist in the
-games project first, and no API can add one:
-
-> Play Games Services -> Setup and management -> **Configuration** -> Edit properties -> Manage translations
-
-Products go in **one batch**, not one request each: Google writes a product in its own time no matter how
-small the change, and asked one at a time it took roughly a quarter of an hour *per product*. A batch is
-all or nothing, so one language Google will not accept sinks all of them - it does name the language
-though, so the import drops it, sends again, and lists what never made it. `bs` and `ga` are not accepted
-for product listings, same as in Play Games Services.
-
-For products, the patch carries an update mask of `listings`, so **prices, regions and purchase options are
-not in the request at all** - `localize` keeps owning them. A listing needs *both* a title and a
-description, so a language that would end up with only one of them is dropped with a warning instead of
-being rejected by Google, and so is anything past the 55 / 200 character limits.
-
-Both take `-n` / `--dry-run`. `locales import iaps` also takes `--iap pack_one,pack_two`.
+`GamesProjectId` in `config.json` - the number the console shows next to the game name - and the
+**`Google Play Game Services Publishing API`** enabled in your
+[Cloud Console](https://console.cloud.google.com/apis/library/gamesconfiguration.googleapis.com). No new
+consent: that API uses the same `androidpublisher` scope as everything else here.
 
 ---
 
