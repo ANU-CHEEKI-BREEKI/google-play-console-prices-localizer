@@ -112,6 +112,50 @@ Then download the **`Client secrets`** of the created OAuth desktop client. This
 
 ---
 
+### Creating new IAPs from a csv
+
+The Play Console has no bulk way to add products, and clicking twenty of them in by hand is exactly
+as fun as it sounds. So there is a small round trip instead: export what you already have, add rows
+to it in a spreadsheet, send it back.
+
+    dotnet run -- export-iaps
+
+writes every One-time product into the csv at `ProductDefinitionsFilePath` from `config.json`
+(`./product-definitions.csv` next to it by default):
+
+    product_id,default_price,title,description
+    crystals_1,0.99,Tiny of Gems,Tiny of Gems
+    crystals_6,99.99,Vault of Gems,Vault of Gems
+
+The price column is the price in your `DefaultRegion` only. All the other regions are left out on
+purpose, they are what `localize` computes from the percentage template.
+
+The title and the description are the store listing in `DefaultLanguageCode` (`en-US` by default).
+The other languages are not exported, and a created product gets that one listing only, the rest are
+added in the Play Console.
+
+Add a row per new product, then:
+
+    dotnet run -- create-iaps -n     # dry run, shows what would be created
+    dotnet run -- create-iaps        # for real
+    dotnet run -- localize           # apply the percentage template to them
+
+Products that already exist are skipped and **never** modified, so running `create-iaps` twice is
+safe and the file can stay as a full snapshot of your catalog. Existing prices are only ever touched
+by `restore` and `localize`.
+
+All new products go to Google in **one batch request**, the way Google recommends for catalog
+creation (`allowMissing` + `LATENCY_TOLERANT`). Prices for every region come from Google's own
+exchange rates, and the region list is copied from a product you already have, so a new product
+lands in exactly the same countries as the rest of your catalog. The tax category is not set, the
+products get the Play Console default.
+
+One row per product. Only the backward compatible purchase option is exported, and a created product
+gets exactly one. The csv separator is detected automatically, so re-exporting the file from Numbers
+or Excel as `;`-separated works too.
+
+---
+
 ### Android vitals export
 
 The Play Console shows crashes, ANRs, slow starts and the rest of Android vitals spread over dozens of screens,
@@ -204,6 +248,12 @@ To reset local prices to the default prices:
 To localize the prices:
 
     dotnet run -- localize
+
+To export all IAPs into a csv, and create the new ones you added to it:
+
+    dotnet run -- export-iaps
+    dotnet run -- create-iaps -n
+    dotnet run -- create-iaps
 
 _first extra `--` its delimiter for `dotnet run` so you can pass any parameters and they all will be passe to our program instead of `dotnet run` command._
 

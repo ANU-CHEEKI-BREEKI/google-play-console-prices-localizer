@@ -75,6 +75,14 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "Specify the ID of a specific In-App Purchase to run command for."
             );
             CommandLinesUtils.PrintOption(
+                "--products <path>",
+                "Specifies path to the csv with product definitions used by the 'export-iaps' and 'create-iaps' commands. If not specified, used path from global config json ('ProductDefinitionsFilePath'), which defaults to './product-definitions.csv' next to it."
+            );
+            CommandLinesUtils.PrintOption(
+                "--language <code>",
+                "Language of the store listing the 'export-iaps' and 'create-iaps' commands read and write. Default is en-US, or the language specified in global config.json."
+            );
+            CommandLinesUtils.PrintOption(
                 "--out <path>",
                 "Specify the directory the 'vitals' command writes its reports into. Default is './vitals-export' next to the global config json."
             );

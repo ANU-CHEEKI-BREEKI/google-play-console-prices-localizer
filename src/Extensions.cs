@@ -1,4 +1,6 @@
+using System.Net;
 using System.Text;
+using Google;
 using Google.Apis.AndroidPublisher.v3;
 using Google.Apis.AndroidPublisher.v3.Data;
 
@@ -84,6 +86,91 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
             return (decimal)total;
         }
+
+        /// <summary>
+        /// Lists every one-time product, following the page tokens.
+        /// The API returns only 50 products per page by default, and a create that does not see
+        /// an existing product would silently overwrite its prices.
+        /// </summary>
+        public static async Task<List<OneTimeProduct>> ListAllAsync(this MonetizationResource.OnetimeproductsResource resource, string package, int pageSize = 1000)
+        {
+            var all = new List<OneTimeProduct>();
+            string? pageToken = null;
+
+            do
+            {
+                var request = resource.List(package);
+                request.PageSize = pageSize;
+                request.PageToken = pageToken;
+
+                var response = await request.ExecuteAsync();
+
+                if (response.OneTimeProducts is not null)
+                    all.AddRange(response.OneTimeProducts);
+
+                pageToken = response.NextPageToken;
+            }
+            while (!string.IsNullOrEmpty(pageToken));
+
+            return all;
+        }
+
+        /// <summary>
+        /// exact decimal price, unlike ToDecimalPrice it never routes through a double
+        /// </summary>
+        public static decimal ToExactDecimalPrice(this Money money)
+            => money is null ? 0m : (money.Units ?? 0) + (money.Nanos ?? 0) / 1_000_000_000m;
+
+        /// <summary>
+        /// same 5 retries / 5s backoff / wording as SendWithRetryAsync, but reports the outcome
+        /// </summary>
+        public static async Task<bool> ExecuteWithRetryAsync(Func<Task> action, string label, int maxRetries = 5)
+        {
+            var currentRetry = 0;
+
+            while (currentRetry < maxRetries)
+            {
+                try
+                {
+                    await action();
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    currentRetry++;
+                    Console.WriteLine($"  [Attempt {currentRetry}/{maxRetries}] Failed: {ex.Message}");
+
+                    // a rejected request is rejected just as hard the fifth time,
+                    // retrying it only burns 25 seconds before saying the same thing
+                    if (IsPermanent(ex))
+                    {
+                        Console.WriteLine($"  >>> SKIPPING {label}, Google Play rejected the request.");
+                        return false;
+                    }
+
+                    if (currentRetry >= maxRetries)
+                    {
+                        Console.WriteLine($"  >>> SKIPPING {label} after {maxRetries} failed attempts.");
+                        return false;
+                    }
+
+                    Console.WriteLine("  Waiting 5 seconds before retrying...");
+                    await Task.Delay(TimeSpan.FromSeconds(5));
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// a client error that will never succeed on its own: a malformed body, a forbidden value,
+        /// a missing permission. 'too many requests' is the one that does go away on its own
+        /// </summary>
+        private static bool IsPermanent(Exception ex)
+            => ex is GoogleApiException api
+               && api.HttpStatusCode >= HttpStatusCode.BadRequest
+               && api.HttpStatusCode < HttpStatusCode.InternalServerError
+               && api.HttpStatusCode != HttpStatusCode.TooManyRequests;
 
         public static async Task SendBatchedWithRetryAsync(this IList<OneTimeProduct> products, AndroidPublisherService service, string package, int maxRetries = 5)
         {

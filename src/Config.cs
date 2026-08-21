@@ -6,6 +6,16 @@ public class Config
     
     public string LocalizedPricesTemplateFilePath { get; set; } = "";
     public string RoundPricesForFilePath { get; set; } = "";
+
+    /// <summary>
+    /// csv with the product definitions the 'export-iaps' and 'create-iaps' commands read and write.
+    /// the default must not be empty: Program.cs combines it with the config directory, and
+    /// Path.Combine(directory, "") gives back the directory itself, which is not a file to write to
+    /// </summary>
+    public string ProductDefinitionsFilePath { get; set; } = "./product-definitions.csv";
+
+    /// <summary>language of the store listing the 'export-iaps' and 'create-iaps' commands read and write</summary>
+    public string DefaultLanguageCode { get; set; } = "en-US";
     
     public string DefaultRegion { get; set; } = "US";
     public string DefaultCurrency { get; set; } = "USD";

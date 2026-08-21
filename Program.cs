@@ -7,6 +7,8 @@ using static Google.Apis.Services.BaseClientService;
 var commands = new CommandsCollection()
 {
     new Command_List(),
+    new Command_ExportIaps(),
+    new Command_CreateIaps(),
     new Command_Restore(),
     new Command_LocalizePrices(),
     new Command_Vitals(),
@@ -59,6 +61,7 @@ config.CredentialsFilePath = Path.Combine(configDirectory, config.CredentialsFil
 config.DefaultPricesFilePath = Path.Combine(configDirectory, config.DefaultPricesFilePath);
 config.LocalizedPricesTemplateFilePath = Path.Combine(configDirectory, config.LocalizedPricesTemplateFilePath);
 config.RoundPricesForFilePath = Path.Combine(configDirectory, config.RoundPricesForFilePath);
+config.ProductDefinitionsFilePath = Path.Combine(configDirectory, config.ProductDefinitionsFilePath);
 config.VitalsOutputPath = Path.Combine(configDirectory, config.VitalsOutputPath);
 
 
@@ -73,6 +76,8 @@ config.RoundPricesForFilePath = args.TryGetOption("--round-prices", config.Round
 config.DefaultRegion = args.TryGetOption("--region", config.DefaultRegion);
 config.DefaultCurrency = args.TryGetOption("--currency", config.DefaultCurrency);
 config.Iap = args.TryGetOption("--iap", config.Iap);
+config.ProductDefinitionsFilePath = args.TryGetOption("--products", config.ProductDefinitionsFilePath);
+config.DefaultLanguageCode = args.TryGetOption("--language", config.DefaultLanguageCode);
 config.VitalsOutputPath = args.TryGetOption("--out", config.VitalsOutputPath);
 
 
