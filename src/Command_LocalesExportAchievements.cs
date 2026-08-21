@@ -11,7 +11,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
     /// clicked through one achievement and one language at a time, which is what makes this the
     /// single most requested translation nobody ever gets around to.
     /// </summary>
-    public class Command_ExportAchievements : CommandBase
+    public class Command_LocalesExportAchievements : CommandBase
     {
         const string KeyHeader = "key";
 
@@ -38,11 +38,11 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     return;
                 }
 
-                var path = Config.AchievementDefinitionsFilePath;
+                var path = Config.AchievementTranslationsFilePath;
                 if (string.IsNullOrWhiteSpace(path) || Directory.Exists(path))
                 {
                     Console.WriteLine($"[ERROR] '{path}' is not a file to write the csv into.");
-                    Console.WriteLine("        set 'AchievementDefinitionsFilePath' in your config.json, or pass --achievements <path>");
+                    Console.WriteLine("        set 'AchievementTranslationsFilePath' in your config.json, or pass --csv <path>");
                     return;
                 }
 
@@ -141,14 +141,14 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             }
         }
 
-        public override string Name => "export-achievements";
+        public override string Name => "locales export achievements";
 
         public override string Description
             => "Exports every Play Games Services achievement into a csv, one row per key and one column per language, ready to be fed to a translation service.";
 
         public override void PrintHelp()
         {
-            Console.WriteLine("export-achievements [--achievements <path-to-achievement-definitions.csv>] [--source-locales <code[,code...]>] [--locales <code[,code...]>] [--languages <code[,code...]>] [--games-project <id>] [-v]");
+            Console.WriteLine("locales export achievements [--csv <path>] [--source-locales <code[,code...]>] [--locales-file <path>] [--locales <code[,code...]>] [--games-project <id>] [-v]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -156,9 +156,9 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintDescription(Description);
             CommandLinesUtils.PrintDescription($"Columns: '{KeyHeader}', then one column per language. Every achievement contributes two rows, '<achievement_id>{NameSuffix}' and '<achievement_id>{DescriptionSuffix}', because a translation service wants one string per row.");
             CommandLinesUtils.PrintDescription("Google never machine translates achievements the way it does the store page, so whatever is not in here is English for everyone.");
-            CommandLinesUtils.PrintDescription("Every language the tool can see gets a column. The source locales only decide what comes first, they never narrow anything down: source locales, then everything already translated, then the extra locales, then whatever --languages adds for this run.");
+            CommandLinesUtils.PrintDescription("Every language the tool can see gets a column, plus every language named in the locales json. The source locales only decide what comes first, they never narrow anything down: source locales, then everything already translated, then the locales json.");
             CommandLinesUtils.PrintDescription("The leading columns are what a translation service reads as its context, so 'en-US, uk, ru' gives it english as the source and ukrainian as the second opinion.");
-            CommandLinesUtils.PrintDescription("Play Games Services hides a language until something is translated into it, and its api has no language list at all. So a language you added in the console and have not filled in yet is invisible here until you name it in 'Locales' or --languages. That empty column is the work.");
+            CommandLinesUtils.PrintDescription("Play Games Services hides a language until something is translated into it, and its api has no language list at all. So a language you added in the console and have not filled in yet is invisible here until the locales json names it. That empty column is the work.");
             CommandLinesUtils.PrintDescription("Exported from the draft version, the one the console edits, falling back to the published one for an achievement never touched since it went live. Points, type, steps and icons are not exported and never change.");
             CommandLinesUtils.PrintDescription("Rows are in the console's own order, by sort rank. An existing csv at the target path is overwritten.");
 
@@ -166,20 +166,20 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             Console.WriteLine("options:");
 
             CommandLinesUtils.PrintOption(
-                "--achievements <path>",
-                "Specifies path to the csv to write. If not specified, used path from global config json ('AchievementDefinitionsFilePath'), which defaults to './achievement-definitions.csv' next to it."
+                "--csv <path>",
+                "Specifies path to the csv to write. If not specified, used path from global config json ('AchievementTranslationsFilePath'), which defaults to './achievement-translations.csv' next to it."
             );
             CommandLinesUtils.PrintOption(
                 "--source-locales <code[,code...]>",
                 "Locales that lead the columns, in this exact order, always exported even when empty. Default is the list from global config.json ('SourceLocales'), and without one the single 'DefaultLanguageCode' leads."
             );
             CommandLinesUtils.PrintOption(
-                "--locales <code[,code...]>",
-                "Every locale to produce a column for, on top of whatever is already translated. Default is the list from global config.json ('Locales'). This is where a language that exists in the console but is still empty has to be named."
+                "--locales-file <path>",
+                "Specifies path to the json with every locale to produce a column for. Default is the path from global config json ('LocalesFilePath'), './locales.json' next to it."
             );
             CommandLinesUtils.PrintOption(
-                "--languages <code[,code...]>",
-                "Same as --locales but meant for one run, appended last. Use the codes Play Games Services itself uses, see the 'locales' command - they are not always the ones the store page uses."
+                "--locales <code[,code...]>",
+                "Locales to export columns for, for this run only. Overrides the whole locales json file. Use the codes Play Games Services itself uses, see 'locales list' - they are not always the ones the store page uses."
             );
             CommandLinesUtils.PrintOption(
                 "--games-project <id>",

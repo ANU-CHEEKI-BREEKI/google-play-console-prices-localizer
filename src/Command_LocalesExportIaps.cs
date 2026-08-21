@@ -9,10 +9,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
     /// shows at the moment of paying, which makes it a worse place for untranslated english than the
     /// store page ever was.
     ///
-    /// Not to be confused with 'export-iaps', which writes the product definitions csv 'create-iaps'
+    /// Not to be confused with the top level 'export-iaps', which writes the product definitions csv 'create-iaps'
     /// reads back - prices, one language, a row per product. This one is only about the text.
     /// </summary>
-    public class Command_ExportIapTranslations : CommandBase
+    public class Command_LocalesExportIaps : CommandBase
     {
         const string KeyHeader = "key";
 
@@ -39,7 +39,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 if (string.IsNullOrWhiteSpace(path) || Directory.Exists(path))
                 {
                     Console.WriteLine($"[ERROR] '{path}' is not a file to write the csv into.");
-                    Console.WriteLine("        set 'IapTranslationsFilePath' in your config.json, or pass --iap-translations <path>");
+                    Console.WriteLine("        set 'IapTranslationsFilePath' in your config.json, or pass --csv <path>");
                     return;
                 }
 
@@ -162,14 +162,14 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 Console.WriteLine(line);
         }
 
-        public override string Name => "export-iap-translations";
+        public override string Name => "locales export iaps";
 
         public override string Description
             => "Exports the title and description of every One-time product into a csv, one row per key and one column per language, ready to be fed to a translation service.";
 
         public override void PrintHelp()
         {
-            Console.WriteLine("export-iap-translations [--iap-translations <path-to-iap-translations.csv>] [--source-locales <code[,code...]>] [--locales-file <path>] [--iap <id[,id...]>] [-v]");
+            Console.WriteLine("locales export iaps [--csv <path>] [--source-locales <code[,code...]>] [--locales-file <path>] [--locales <code[,code...]>] [--iap <id[,id...]>] [-v]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -177,7 +177,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintDescription(Description);
             CommandLinesUtils.PrintDescription($"Columns: '{KeyHeader}', then one column per language. Every product contributes two rows, '<product_id>{TitleSuffix}' and '<product_id>{DescriptionSuffix}', because a translation service wants one string per row.");
             CommandLinesUtils.PrintDescription("Google auto translates the store page and nothing else, so a product listing stays in whatever language it was typed in - and that listing is what the Play purchase sheet shows at the moment of paying.");
-            CommandLinesUtils.PrintDescription("Not to be confused with 'export-iaps', which writes the product definitions csv 'create-iaps' reads back: prices, one language, one row per product. This command is only about the text.");
+            CommandLinesUtils.PrintDescription("Not to be confused with 'export-iaps', the top level command that writes the product definitions csv 'create-iaps' reads back: prices, one language, one row per product. This command is only about the text.");
             CommandLinesUtils.PrintDescription("Every language the tool can see gets a column, plus every language named in the locales json. The source locales only decide what comes first, they never narrow anything down.");
             CommandLinesUtils.PrintDescription("A title over 55 characters or a description over 200 is reported at the end, because Google rejects those and a translation is routinely longer than its english.");
             CommandLinesUtils.PrintDescription("An existing csv at the target path is overwritten.");
@@ -186,7 +186,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             Console.WriteLine("options:");
 
             CommandLinesUtils.PrintOption(
-                "--iap-translations <path>",
+                "--csv <path>",
                 "Specifies path to the csv to write. If not specified, used path from global config json ('IapTranslationsFilePath'), which defaults to './iap-translations.csv' next to it."
             );
             CommandLinesUtils.PrintOption(

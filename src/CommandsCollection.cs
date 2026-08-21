@@ -83,10 +83,6 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "Specifies path to the csv with product definitions used by the 'export-iaps' and 'create-iaps' commands. If not specified, used path from global config json ('ProductDefinitionsFilePath'), which defaults to './product-definitions.csv' next to it."
             );
             CommandLinesUtils.PrintOption(
-                "--achievements <path>",
-                "Specifies path to the csv with achievement translations used by the 'export-achievements' command. If not specified, used path from global config json ('AchievementDefinitionsFilePath'), which defaults to './achievement-definitions.csv' next to it."
-            );
-            CommandLinesUtils.PrintOption(
                 "--language <code>",
                 "Language of the store listing the 'export-iaps' and 'create-iaps' commands read and write. Default is en-US, or the language specified in global config.json."
             );
@@ -95,8 +91,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "Locales that lead the exported columns, in this exact order, and that are always exported even when empty. These are the languages a translation service reads as its context. Default is the list from global config.json ('SourceLocales')."
             );
             CommandLinesUtils.PrintOption(
-                "--iap-translations <path>",
-                "Specifies path to the csv with One-time product title and description translations used by the 'export-iap-translations' command. If not specified, used path from global config json ('IapTranslationsFilePath'), which defaults to './iap-translations.csv' next to it."
+                "--csv <path>",
+                "Csv the 'locales export' subcommands write. Defaults come from global config json: 'AchievementTranslationsFilePath' ('./achievement-translations.csv') and 'IapTranslationsFilePath' ('./iap-translations.csv')."
             );
             CommandLinesUtils.PrintOption(
                 "--locales-file <path>",

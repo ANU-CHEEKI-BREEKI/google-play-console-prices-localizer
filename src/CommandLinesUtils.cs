@@ -229,11 +229,15 @@ public static class CommandLinesUtils
     public static bool HasFlag(this string[] args, string flag)
         => args.Contains(flag);
 
+    /// <summary>
+    /// value of "--option value". The name is matched exactly: a prefix match would make '--iap'
+    /// swallow a longer '--iap-...' option, and '--locales' swallow '--locales-file'
+    /// </summary>
     public static string TryGetOption(this string[] args, string arg, string defaultValue)
     {
         var pathIndex = args
             .Select((a, i) => new { a, i })
-            .Where(a => a.a.StartsWith(arg))
+            .Where(a => string.Equals(a.a, arg, StringComparison.Ordinal))
             .FirstOrDefault()?.i ?? -1;
 
         if (pathIndex < 0 || pathIndex + 1 >= args.Length)

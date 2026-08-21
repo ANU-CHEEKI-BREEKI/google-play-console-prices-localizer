@@ -15,8 +15,6 @@ var commands = new CommandsCollection()
     new Command_LocalizePrices(),
     new Command_Vitals(),
     new Command_Locales(),
-    new Command_ExportAchievements(),
-    new Command_ExportIapTranslations(),
     new Command_Config(),
 };
 
@@ -29,6 +27,10 @@ if (command is null)
     Console.WriteLine("no command fount for passed parameters");
     return;
 }
+
+// the command sees its args before anything else: a command with subcommands routes both its help
+// and the set of google services it needs off them, and both are decided before Initialize runs
+command.Args = args;
 
 if (args.HasFlag("-h")
     || args.HasFlag("--help"))
@@ -94,7 +96,7 @@ config.DefaultPricesFilePath = Path.Combine(configDirectory, config.DefaultPrice
 config.LocalizedPricesTemplateFilePath = Path.Combine(configDirectory, config.LocalizedPricesTemplateFilePath);
 config.RoundPricesForFilePath = Path.Combine(configDirectory, config.RoundPricesForFilePath);
 config.ProductDefinitionsFilePath = Path.Combine(configDirectory, config.ProductDefinitionsFilePath);
-config.AchievementDefinitionsFilePath = Path.Combine(configDirectory, config.AchievementDefinitionsFilePath);
+config.AchievementTranslationsFilePath = Path.Combine(configDirectory, config.AchievementTranslationsFilePath);
 config.LocalesFilePath = Path.Combine(configDirectory, config.LocalesFilePath);
 config.IapTranslationsFilePath = Path.Combine(configDirectory, config.IapTranslationsFilePath);
 config.VitalsOutputPath = Path.Combine(configDirectory, config.VitalsOutputPath);
@@ -111,9 +113,9 @@ config.RoundPricesForFilePath = args.TryGetOption("--round-prices", config.Round
 config.DefaultRegion = args.TryGetOption("--region", config.DefaultRegion);
 config.DefaultCurrency = args.TryGetOption("--currency", config.DefaultCurrency);
 config.ProductDefinitionsFilePath = args.TryGetOption("--products", config.ProductDefinitionsFilePath);
-config.AchievementDefinitionsFilePath = args.TryGetOption("--achievements", config.AchievementDefinitionsFilePath);
+config.AchievementTranslationsFilePath = args.TryGetOption("--csv", config.AchievementTranslationsFilePath);
 config.LocalesFilePath = args.TryGetOption("--locales-file", config.LocalesFilePath);
-config.IapTranslationsFilePath = args.TryGetOption("--iap-translations", config.IapTranslationsFilePath);
+config.IapTranslationsFilePath = args.TryGetOption("--csv", config.IapTranslationsFilePath);
 config.DefaultLanguageCode = args.TryGetOption("--language", config.DefaultLanguageCode);
 
 var sourceLocales = args.TryGetOption("--source-locales", "");

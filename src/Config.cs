@@ -15,15 +15,15 @@ public class Config
     public string ProductDefinitionsFilePath { get; set; } = "./product-definitions.csv";
 
     /// <summary>
-    /// csv with the achievement translations the 'export-achievements' command writes.
+    /// csv with the achievement translations the 'locales export achievements' command writes.
     /// like ProductDefinitionsFilePath the default must not be empty, Program.cs combines it
     /// with the config directory
     /// </summary>
-    public string AchievementDefinitionsFilePath { get; set; } = "./achievement-definitions.csv";
+    public string AchievementTranslationsFilePath { get; set; } = "./achievement-translations.csv";
 
     /// <summary>
     /// csv with the one-time product title and description translations the
-    /// 'export-iap-translations' command writes. Like the other paths, must not be empty
+    /// 'locales export iaps' command writes. Like the other paths, must not be empty
     /// </summary>
     public string IapTranslationsFilePath { get; set; } = "./iap-translations.csv";
 

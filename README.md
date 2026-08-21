@@ -243,7 +243,18 @@ Your Play Console account needs at least the *"View app information (read-only)"
 
 ---
 
-### Which languages do I already have?
+### Languages: `locales`
+
+Everything about languages lives under one command, because everything about languages shares one
+`SourceLocales` and one `locales.json`:
+
+    locales                         # what exists where, the default
+    locales export achievements     # achievement names and descriptions out to a csv
+    locales export iaps             # product titles and descriptions out to a csv
+
+Run `locales <subcommand> --help` for the options of one of them.
+
+#### `locales list`
 
     dotnet run locales
 
@@ -309,18 +320,18 @@ same `androidpublisher` scope the IAP commands already use.
 
 ---
 
-### Translating achievements
+#### `locales export achievements`
 
 Google machine translates your store page. It **never** touches achievements - a game with 73 of them
 in English has 73 of them in English in every country. The console only lets you click through one
 achievement and one language at a time, which is why nobody ever finishes.
 
-    dotnet run -- export-achievements
+    dotnet run -- locales export achievements
 
     receiving achievements...
-    exporting 73 achievement(s) in 3 language(s) into .../achievement-definitions.csv...
+    exporting 73 achievement(s) in 3 language(s) into .../achievement-translations.csv...
 
-    written: .../achievement-definitions.csv
+    written: .../achievement-translations.csv
     146 key(s) from 73 achievement(s), 44 language(s): en-US, uk, ru-RU, pt-PT, ... id as id-ID, ...
 
     filled in:
@@ -389,17 +400,17 @@ an achievement never touched since it went live. Points, type, steps and icons a
 change. Rows come out in the console's own order, by sort rank.
 
 Needs `GamesProjectId` in `config.json` and the `Google Play Game Services Publishing API` enabled -
-see [the `locales` section](#which-languages-do-i-already-have) above.
+see [the `locales` section](#languages-locales) above.
 
 ---
 
-### Translating in-app purchases
+#### `locales export iaps`
 
 Same problem, different screen. Google auto translates your store page and nothing else, so a product's
 title and description stay in whatever language you typed them in - and that is the text the Play purchase
 sheet shows **at the moment somebody pays**.
 
-    dotnet run -- export-iap-translations
+    dotnet run -- locales export iaps
 
     receiving IAP list...
     exporting 30 product(s) in 44 language(s) into .../iap-translations.csv...
@@ -419,15 +430,14 @@ same `SourceLocales` and `locales.json` decide the columns:
     pack_adventurer.title                   Adventurer Pack with Discount
     pack_adventurer.description             Instantly get 300 Astral Shards...
 
-**Not to be confused with `export-iaps`.** That one writes the product definitions csv `create-iaps` reads
+**Not to be confused with the top level `export-iaps`.** That one writes the product definitions csv `create-iaps` reads
 back: prices, one language, one row per product. This one is only about the text, and never touches a price.
 
 Google rejects a title over 55 characters or a description over 200, and a translation is routinely longer
 than the english it came from. Anything already over the limit is listed at the end of the run.
 
 Narrow it to a few products with `--iap pack_one,pack_two`, or write somewhere else with
-`--iap-translations <path>` (`IapTranslationsFilePath` in `config.json`, `./iap-translations.csv` by
-default).
+`--csv <path>` (`IapTranslationsFilePath` in `config.json`, `./iap-translations.csv` by default).
 
 ---
 
