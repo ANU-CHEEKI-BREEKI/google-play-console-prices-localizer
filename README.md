@@ -435,6 +435,12 @@ same `SourceLocales` and `locales.json` decide the columns:
 **Not to be confused with the top level `export-iaps`.** That one writes the product definitions csv `create-iaps` reads
 back: prices, one language, one row per product. This one is only about the text, and never touches a price.
 
+Google rejects a title over 55 characters or a description over 200, and a translation is routinely longer
+than the english it came from. Anything already over the limit is listed at the end of the run.
+
+Narrow it to a few products with `--iap pack_one,pack_two`, or write somewhere else with
+`--csv <path>` (`IapTranslationsFilePath` in `config.json`, `./iap-translations.csv` by default).
+
 #### `locales import achievements` and `locales import iaps`
 
 Same csv, the other direction:
@@ -457,6 +463,19 @@ Four things worth knowing before running it:
   still reaches the API as `id`.
 - **Cells are trimmed.** A stray leading or trailing space in the csv is not sent as a change of its own,
   and a value that only differs from Google's by surrounding whitespace *is* rewritten without it.
+
+**Achievement names have to be unique inside each language**, and this is checked before anything is sent:
+
+    [ERROR] 1 achievement name(s) are not unique within their language.
+            Google takes them, then refuses to publish and does not say why. Nothing was sent.
+
+            [tr-TR] "Keskin nişancı" is used by CgkIj8z_jpUZEAIQDg and CgkIj8z_jpUZEAIQDw
+
+Worth checking up front because Google accepts the clash without a word, and then blocks publishing with
+*"there is a problem with your achievement"* and never says which problem. Translators collapse near
+synonyms as a matter of course - `Deadeye` and `Sharpshooter` came back as the same word in eight
+languages. The comparison ignores case, which is not pedantry: Turkish came back as `Keskin Nişancı`
+against `Keskin nişancı`.
 
 **Play Games Services refuses a whole request over one language it does not accept**, so the import sends
 one achievement on its own first and works out which ones those are before touching the other 72:
@@ -493,12 +512,6 @@ description, so a language that would end up with only one of them is dropped wi
 being rejected by Google, and so is anything past the 55 / 200 character limits.
 
 Both take `-n` / `--dry-run`. `locales import iaps` also takes `--iap pack_one,pack_two`.
-
-Google rejects a title over 55 characters or a description over 200, and a translation is routinely longer
-than the english it came from. Anything already over the limit is listed at the end of the run.
-
-Narrow it to a few products with `--iap pack_one,pack_two`, or write somewhere else with
-`--csv <path>` (`IapTranslationsFilePath` in `config.json`, `./iap-translations.csv` by default).
 
 ---
 
