@@ -131,38 +131,117 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     })],
                 };
 
-                Console.WriteLine($"   -> updating {changed.Count} product(s) in one request...");
-                Console.WriteLine("      Google takes a couple of minutes to write a batch, this is normal.");
+                var refused = new List<string>();
 
-                var ok = await Extensions.ExecuteWithRetryAsync(
-                    () => Extensions.Timed("the listings update", async () =>
+                // a batch is all or nothing, and one language Google will not take sinks all thirty
+                // products. It does name the language though, so dropping and resending gets there
+                for (int round = 0; round <= csv.Locales.Count; round++)
+                {
+                    Console.WriteLine($"   -> updating {changed.Count} product(s) in one request...");
+                    Console.WriteLine("      Google takes a couple of minutes to write a batch, this is normal.");
+
+                    var error = await SendBatch(body);
+
+                    if (error is null)
                     {
-                        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(15));
-                        await Service.Monetization.Onetimeproducts.BatchUpdate(body, Package).ExecuteAsync(timeout.Token);
-                    }),
-                    $"{changed.Count} product(s)"
-                );
+                        Console.WriteLine();
+                        Console.WriteLine($"updated {changed.Count} product(s). Prices were not part of the request.");
 
-                Console.WriteLine();
+                        if (verbose)
+                        {
+                            foreach (var product in changed)
+                                Console.WriteLine($"   {product.ProductId}: {product.Listings?.Count ?? 0} listing(s)");
+                        }
 
-                if (!ok)
-                {
-                    Console.WriteLine("nothing was written: a batch is all or nothing.");
-                    Console.WriteLine("re-run for one product at a time with --iap <id> to find the one Google objects to.");
-                    return;
-                }
+                        if (refused.Count > 0)
+                        {
+                            Console.WriteLine();
+                            Console.WriteLine($"{refused.Count} language(s) were NOT imported: {string.Join(", ", refused)}");
+                            Console.WriteLine("Google does not accept these codes for product listings at all. Take them out of your locales json and out of the csv.");
+                        }
 
-                Console.WriteLine($"updated {changed.Count} product(s). Prices were not part of the request.");
+                        return;
+                    }
 
-                if (verbose)
-                {
+                    var unsupported = UnsupportedLanguage(error.Message);
+
+                    if (unsupported is null)
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("[ERROR] Google Play rejected the batch, and a batch is all or nothing.");
+                        Console.WriteLine($"        {error.Message.Trim()}");
+                        Console.WriteLine("        Nothing was written. Re-run for one product at a time with --iap <id> to narrow it down.");
+                        return;
+                    }
+
+                    Console.WriteLine($"   Google refuses '{unsupported}', dropping it and sending again");
+                    refused.Add(unsupported);
+
                     foreach (var product in changed)
-                        Console.WriteLine($"   {product.ProductId}: {product.Listings?.Count ?? 0} listing(s)");
+                        DropLocale(product, unsupported);
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex);
+            }
+        }
+
+        /// <summary>
+        /// Sends the batch, riding out the 503s Google throws at a big one. null means it went
+        /// through, anything else is Google's own objection and worth reading
+        /// </summary>
+        async Task<Google.GoogleApiException?> SendBatch(BatchUpdateOneTimeProductsRequest body)
+        {
+            for (int attempt = 0; attempt < 5; attempt++)
+            {
+                try
+                {
+                    await Extensions.Timed("the listings update", async () =>
+                    {
+                        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(15));
+                        await Service!.Monetization.Onetimeproducts.BatchUpdate(body, Package).ExecuteAsync(timeout.Token);
+                    });
+
+                    return null;
+                }
+                catch (Google.GoogleApiException ex)
+                {
+                    // 5xx is Google being busy, not Google disagreeing
+                    if ((int)ex.HttpStatusCode < 500)
+                        return ex;
+
+                    Console.WriteLine($"      {ex.HttpStatusCode}, retrying...");
+                    await Task.Delay(TimeSpan.FromSeconds(5 * (attempt + 1)));
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// the language out of 'Product "x": Language bs isn't supported. Choose another language.'
+        /// null when the message is not that one
+        /// </summary>
+        static string? UnsupportedLanguage(string message)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                message,
+                @"Language (?<locale>[A-Za-z0-9\-_]+) isn't supported"
+            );
+
+            return match.Success ? match.Groups["locale"].Value : null;
+        }
+
+        static void DropLocale(OneTimeProduct product, string locale)
+        {
+            if (product.Listings is null)
+                return;
+
+            foreach (var listing in product.Listings.ToList())
+            {
+                if (string.Equals(listing.LanguageCode, locale, StringComparison.OrdinalIgnoreCase))
+                    product.Listings.Remove(listing);
             }
         }
 
