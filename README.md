@@ -393,6 +393,44 @@ see [the `locales` section](#which-languages-do-i-already-have) above.
 
 ---
 
+### Translating in-app purchases
+
+Same problem, different screen. Google auto translates your store page and nothing else, so a product's
+title and description stay in whatever language you typed them in - and that is the text the Play purchase
+sheet shows **at the moment somebody pays**.
+
+    dotnet run -- export-iap-translations
+
+    receiving IAP list...
+    exporting 30 product(s) in 44 language(s) into .../iap-translations.csv...
+
+    written: .../iap-translations.csv
+    60 key(s) from 30 product(s), 44 language(s): en-US, uk, ru-RU, ... id as id-ID, ...
+
+    filled in:
+            en-US        60 of 60 key(s)
+            uk            0 of 60 key(s)  <- empty, ready to translate
+            ...
+
+Exactly the same csv shape as the achievements one - one row per key, one column per language - and the
+same `SourceLocales` and `locales.json` decide the columns:
+
+    key                                     en-US                   uk  ru-RU
+    pack_adventurer.title                   Adventurer Pack with Discount
+    pack_adventurer.description             Instantly get 300 Astral Shards...
+
+**Not to be confused with `export-iaps`.** That one writes the product definitions csv `create-iaps` reads
+back: prices, one language, one row per product. This one is only about the text, and never touches a price.
+
+Google rejects a title over 55 characters or a description over 200, and a translation is routinely longer
+than the english it came from. Anything already over the limit is listed at the end of the run.
+
+Narrow it to a few products with `--iap pack_one,pack_two`, or write somewhere else with
+`--iap-translations <path>` (`IapTranslationsFilePath` in `config.json`, `./iap-translations.csv` by
+default).
+
+---
+
 ### Examples
 
 1. You cloned the repository and built the program.

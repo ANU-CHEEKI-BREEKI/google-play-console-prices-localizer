@@ -16,6 +16,7 @@ var commands = new CommandsCollection()
     new Command_Vitals(),
     new Command_Locales(),
     new Command_ExportAchievements(),
+    new Command_ExportIapTranslations(),
     new Command_Config(),
 };
 
@@ -95,6 +96,7 @@ config.RoundPricesForFilePath = Path.Combine(configDirectory, config.RoundPrices
 config.ProductDefinitionsFilePath = Path.Combine(configDirectory, config.ProductDefinitionsFilePath);
 config.AchievementDefinitionsFilePath = Path.Combine(configDirectory, config.AchievementDefinitionsFilePath);
 config.LocalesFilePath = Path.Combine(configDirectory, config.LocalesFilePath);
+config.IapTranslationsFilePath = Path.Combine(configDirectory, config.IapTranslationsFilePath);
 config.VitalsOutputPath = Path.Combine(configDirectory, config.VitalsOutputPath);
 
 
@@ -111,6 +113,7 @@ config.DefaultCurrency = args.TryGetOption("--currency", config.DefaultCurrency)
 config.ProductDefinitionsFilePath = args.TryGetOption("--products", config.ProductDefinitionsFilePath);
 config.AchievementDefinitionsFilePath = args.TryGetOption("--achievements", config.AchievementDefinitionsFilePath);
 config.LocalesFilePath = args.TryGetOption("--locales-file", config.LocalesFilePath);
+config.IapTranslationsFilePath = args.TryGetOption("--iap-translations", config.IapTranslationsFilePath);
 config.DefaultLanguageCode = args.TryGetOption("--language", config.DefaultLanguageCode);
 
 var sourceLocales = args.TryGetOption("--source-locales", "");

@@ -95,6 +95,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "Locales that lead the exported columns, in this exact order, and that are always exported even when empty. These are the languages a translation service reads as its context. Default is the list from global config.json ('SourceLocales')."
             );
             CommandLinesUtils.PrintOption(
+                "--iap-translations <path>",
+                "Specifies path to the csv with One-time product title and description translations used by the 'export-iap-translations' command. If not specified, used path from global config json ('IapTranslationsFilePath'), which defaults to './iap-translations.csv' next to it."
+            );
+            CommandLinesUtils.PrintOption(
                 "--locales-file <path>",
                 "Specifies path to the json with every locale the exports produce a column for, a plain array of codes. If not specified, used path from global config json ('LocalesFilePath'), which defaults to './locales.json' next to it."
             );

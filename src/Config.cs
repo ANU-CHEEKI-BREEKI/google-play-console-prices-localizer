@@ -21,6 +21,12 @@ public class Config
     /// </summary>
     public string AchievementDefinitionsFilePath { get; set; } = "./achievement-definitions.csv";
 
+    /// <summary>
+    /// csv with the one-time product title and description translations the
+    /// 'export-iap-translations' command writes. Like the other paths, must not be empty
+    /// </summary>
+    public string IapTranslationsFilePath { get; set; } = "./iap-translations.csv";
+
     /// <summary>language of the store listing the 'export-iaps' and 'create-iaps' commands read and write</summary>
     public string DefaultLanguageCode { get; set; } = "en-US";
 
