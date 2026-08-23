@@ -14,7 +14,11 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
     /// </summary>
     public class Command_LocalesExportIaps : CommandBase
     {
-        const string KeyHeader = "key";
+        const string KeyHeader = LocaleColumns.KeyColumn;
+
+        /// <summary>what Google truncates a listing at. Quoted in the comment column for the translator</summary>
+        const int TitleLimit = 55;
+        const int DescriptionLimit = 200;
 
         /// <summary>
         /// key suffixes. Product ids are lowercase letters, digits, underscores and dots... a dot is
@@ -79,17 +83,17 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                     // title and description are two separate keys: a translation service wants one
                     // string per row, and the two are translated independently anyway
-                    rows.Add(BuildRow(product.ProductId + TitleSuffix, listings, locales, l => l.Title));
-                    rows.Add(BuildRow(product.ProductId + DescriptionSuffix, listings, locales, l => l.Description));
+                    listings.TryGetValue(locales[0].Locale, out var leading);
+                    var title = leading?.Title ?? product.ProductId;
+
+                    rows.Add(BuildRow(product.ProductId + TitleSuffix, Comment(title, "Title", TitleLimit), listings, locales, l => l.Title));
+                    rows.Add(BuildRow(product.ProductId + DescriptionSuffix, Comment(title, "Description", DescriptionLimit), listings, locales, l => l.Description));
 
                     if (verbose)
-                    {
-                        listings.TryGetValue(locales[0].Locale, out var lead);
-                        Console.WriteLine($"   {product.ProductId}: \"{lead?.Title ?? ""}\", {listings.Count} listing(s)");
-                    }
+                        Console.WriteLine($"   {product.ProductId}: \"{leading?.Title ?? ""}\", {listings.Count} listing(s)");
                 }
 
-                List<string> headers = [KeyHeader, .. locales.Select(l => l.Column)];
+                List<string> headers = [KeyHeader, LocaleColumns.CommentsColumn, .. locales.Select(LocaleColumns.ColumnName)];
 
                 await CommandLinesUtils.SaveCsv(path, headers, rows);
 
@@ -106,13 +110,17 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             }
         }
 
+        static string Comment(string title, string field, int limit)
+            => $"In-App Purchase '{title}' > {field}. Max {limit} characters.";
+
         static List<string> BuildRow(
             string key,
+            string comment,
             Dictionary<string, Google.Apis.AndroidPublisher.v3.Data.OneTimeProductListing> listings,
             List<LocaleColumn> locales,
             Func<Google.Apis.AndroidPublisher.v3.Data.OneTimeProductListing, string?> field
         )
-            => [key, .. locales.Select(l => listings.TryGetValue(l.Locale, out var listing) ? field(listing) ?? "" : "")];
+            => [key, comment, .. locales.Select(l => listings.TryGetValue(l.Locale, out var listing) ? field(listing) ?? "" : "")];
 
         /// <summary>
         /// How much of each language is actually filled in. Without this the csv looks complete the
@@ -125,8 +133,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
             for (int i = 0; i < locales.Count; i++)
             {
-                // +1 for the key column
-                var filled = rows.Count(r => !string.IsNullOrWhiteSpace(r[i + 1]));
+                // +2 for the key and comment columns
+                var filled = rows.Count(r => !string.IsNullOrWhiteSpace(r[i + 2]));
                 var note = filled == 0 ? "  <- empty, ready to translate" : "";
                 Console.WriteLine($"        {locales[i].Column,-10} {filled,4} of {rows.Count} key(s){note}");
             }
@@ -143,11 +151,11 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
             foreach (var row in rows)
             {
-                var limit = row[0].EndsWith(TitleSuffix, StringComparison.Ordinal) ? 55 : 200;
+                var limit = row[0].EndsWith(TitleSuffix, StringComparison.Ordinal) ? TitleLimit : DescriptionLimit;
 
                 for (int i = 0; i < locales.Count; i++)
                 {
-                    var value = row[i + 1];
+                    var value = row[i + 2];
                     if (value.Length > limit)
                         over.Add($"        {row[0]} [{locales[i].Column}] is {value.Length}, the limit is {limit}");
                 }
@@ -175,7 +183,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
             Console.WriteLine("description:");
             CommandLinesUtils.PrintDescription(Description);
-            CommandLinesUtils.PrintDescription($"Columns: '{KeyHeader}', then one column per language. Every product contributes two rows, '<product_id>{TitleSuffix}' and '<product_id>{DescriptionSuffix}', because a translation service wants one string per row.");
+            CommandLinesUtils.PrintDescription($"Columns: '{KeyHeader}', '{LocaleColumns.CommentsColumn}' (which product, which field, how long it may be), then one column per language named 'English (United States)(en-US)' - the locale code in the trailing parentheses is what the import reads. Every product contributes two rows, '<product_id>{TitleSuffix}' and '<product_id>{DescriptionSuffix}', because a translation service wants one string per row.");
             CommandLinesUtils.PrintDescription("Google auto translates the store page and nothing else, so a product listing stays in whatever language it was typed in - and that listing is what the Play purchase sheet shows at the moment of paying.");
             CommandLinesUtils.PrintDescription("Not to be confused with 'export-iaps', the top level command that writes the product definitions csv 'create-iaps' reads back: prices, one language, one row per product. This command is only about the text.");
             CommandLinesUtils.PrintDescription("Every language the tool can see gets a column, plus every language named in the locales json. The source locales only decide what comes first, they never narrow anything down.");

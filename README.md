@@ -297,11 +297,18 @@ Services keeps its languages in the game details, which no API can touch - add t
             en-US       146 of 146 key(s)
             uk            0 of 146 key(s)  <- empty, ready to translate
 
-One row per key, one column per language - the layout every translation service reads:
+One row per key, one column per language - the same table the iOS sibling tool writes, so one
+translation pipeline covers both:
 
-    key                                 en-US                     uk
-    CgkIAAAAAAAAAAAAAA.name             Dragon Slayer            Вбивця Драконів
-    CgkIAAAAAAAAAAAAAA.description      Defeat the dragon...    Здолай дракона...
+    "Key","Shared Comments","English (United States)(en-US)","Ukrainian(uk)"
+    "CgkIAAAAAAAAAAAAAA.name","Play Games achievement 'Dragon Slayer' > Name. Max 30 characters.","Dragon Slayer","Вбивця Драконів"
+    "CgkIAAAAAAAAAAAAAA.description","Play Games achievement 'Dragon Slayer' > Description. Max 300 characters.","Defeat the dragon...","Здолай дракона..."
+
+- `Shared Comments` is context for the translator: which item, which field, how long it may be. It
+  is never read back
+- a language is identified by the **locale code in the trailing parentheses** of its column header,
+  so `Ukrainian(uk)` and a plain `uk` mean the same thing on import. The name in front is only there
+  because a translation service reads `id` as an identifier column and `Indonesian(id-ID)` as a language
 
 Every item contributes two rows (`.name`/`.description` for achievements, `.title`/`.description` for
 products). Achievements export from the **draft**, the copy the console edits; points, type, steps and
@@ -341,7 +348,7 @@ Order: `SourceLocales`, then everything already translated, then `locales.json`.
 
 - **An empty cell means "not translated yet"** and is left alone. Nothing here can delete a translation.
 - **A value identical to what Google has is not sent.** Re-running an unchanged csv writes nothing.
-- **Column headers map back through `locales.json`**, so `id-ID` reaches the API as `id`.
+- **Column headers map back through `locales.json`**, so `Indonesian(id-ID)` reaches the API as `id`.
 - Cells are trimmed, so a stray space is not a change of its own.
 - Both take `-n` / `--dry-run`; `locales import iaps` also takes `--iap pack_one,pack_two`.
 

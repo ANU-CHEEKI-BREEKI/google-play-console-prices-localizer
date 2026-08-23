@@ -31,15 +31,17 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
     public static class Translations
     {
-        public const string KeyHeader = "key";
+        public const string KeyHeader = LocaleColumns.KeyColumn;
 
         /// <summary>
         /// Reads a translations csv back.
         ///
-        /// The column headers are the language names the export wrote, which are not always the locale
-        /// codes the api wants - 'id-ID' in the csv is 'id' to Google. <paramref name="known"/> is the
-        /// locales json, and it is what maps a column back to its locale. A column the file says
-        /// nothing about is taken as a locale code as is.
+        /// A language column is 'English (United States)(en-US)': the code in the trailing parentheses
+        /// is the csv side of the locale, which is not always what the api wants - 'id-ID' in the csv
+        /// is 'id' to Google. <paramref name="known"/> is the locales json, and it is what maps that
+        /// code back to its locale. A code the file says nothing about is taken as a locale as is.
+        /// A header with no parentheses at all is read as a bare code, the shape older exports wrote.
+        /// 'Key' and 'Shared Comments' are bookkeeping and never data.
         ///
         /// Empty cells are dropped here rather than later: an importer must be able to tell "not
         /// translated yet" from "translated to an empty string", and only the first of those exists.
@@ -52,10 +54,13 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             if (keyHeader is null)
                 throw new InvalidOperationException($"the csv has no '{KeyHeader}' column, its headers are: {string.Join(", ", table.Headers)}");
 
-            var locales = table.Headers
-                .Where(h => !string.Equals(h, keyHeader, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(h))
-                .Select(h => new LocaleColumn(LocaleOf(h, known), h))
+            var columns = table.Headers
+                .Where(h => !string.IsNullOrWhiteSpace(h) && !LocaleColumns.IsBookkeeping(h))
+                .Select(h => new { Header = h, Code = LocaleColumns.Extract(h) ?? h })
+                .Select(c => new { c.Header, Locale = new LocaleColumn(LocaleOf(c.Code, known), c.Code) })
                 .ToList();
+
+            var locales = columns.Select(c => c.Locale).ToList();
 
             var rows = new List<TranslationRow>();
 
@@ -75,12 +80,12 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                 var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-                foreach (var locale in locales)
+                foreach (var column in columns)
                 {
-                    if (!row.TryGetValue(locale.Column, out var value) || string.IsNullOrWhiteSpace(value))
+                    if (!row.TryGetValue(column.Header, out var value) || string.IsNullOrWhiteSpace(value))
                         continue;
 
-                    values[locale.Locale] = value;
+                    values[column.Locale.Locale] = value;
                 }
 
                 rows.Add(new TranslationRow

@@ -13,7 +13,14 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
     /// </summary>
     public class Command_LocalesExportAchievements : CommandBase
     {
-        const string KeyHeader = "key";
+        const string KeyHeader = LocaleColumns.KeyColumn;
+
+        /// <summary>
+        /// what the Play Console enforces in its own form: 30 for the name, 300 for the description.
+        /// Quoted in the comment column so the translation service knows how much room it has
+        /// </summary>
+        const int NameLimit = 30;
+        const int DescriptionLimit = 300;
 
         /// <summary>
         /// key suffixes. Achievement ids are base64url tokens like CgkIAAAAAAAAAAAAAA and never
@@ -95,14 +102,18 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                     // name and description are two separate keys: a translation service wants one
                     // string per row, and the two are translated independently anyway
-                    rows.Add(BuildRow(achievement.Id + NameSuffix, detail.Name, locales));
-                    rows.Add(BuildRow(achievement.Id + DescriptionSuffix, detail.Description, locales));
+                    // the leading language's name goes into the comment so the translator sees which
+                    // achievement a lonely description row belongs to
+                    var title = detail.Name.ValueFor(locales[0].Locale);
+
+                    rows.Add(BuildRow(achievement.Id + NameSuffix, Comment(title, "Name", NameLimit), detail.Name, locales));
+                    rows.Add(BuildRow(achievement.Id + DescriptionSuffix, Comment(title, "Description", DescriptionLimit), detail.Description, locales));
 
                     if (verbose)
                         Console.WriteLine($"   {achievement.Id}: \"{detail.Name.ValueFor(locales[0].Locale)}\"");
                 }
 
-                List<string> headers = [KeyHeader, .. locales.Select(l => l.Column)];
+                List<string> headers = [KeyHeader, LocaleColumns.CommentsColumn, .. locales.Select(LocaleColumns.ColumnName)];
 
                 await CommandLinesUtils.SaveCsv(path, headers, rows);
 
@@ -120,8 +131,11 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             }
         }
 
-        static List<string> BuildRow(string key, GamesConfig.Data.LocalizedStringBundle? bundle, List<LocaleColumn> locales)
-            => [key, .. locales.Select(l => bundle.ValueFor(l.Locale))];
+        static string Comment(string title, string field, int limit)
+            => $"Play Games achievement '{title}' > {field}. Max {limit} characters.";
+
+        static List<string> BuildRow(string key, string comment, GamesConfig.Data.LocalizedStringBundle? bundle, List<LocaleColumn> locales)
+            => [key, comment, .. locales.Select(l => bundle.ValueFor(l.Locale))];
 
         /// <summary>
         /// How much of each language is actually filled in. Without this the csv looks complete the
@@ -134,8 +148,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
             for (int i = 0; i < locales.Count; i++)
             {
-                // +1 for the key column
-                var filled = rows.Count(r => !string.IsNullOrWhiteSpace(r[i + 1]));
+                // +2 for the key and comment columns
+                var filled = rows.Count(r => !string.IsNullOrWhiteSpace(r[i + 2]));
                 var note = filled == 0 ? "  <- empty, ready to translate" : "";
                 Console.WriteLine($"        {locales[i].Column,-10} {filled,4} of {rows.Count} key(s){note}");
             }
@@ -154,7 +168,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
             Console.WriteLine("description:");
             CommandLinesUtils.PrintDescription(Description);
-            CommandLinesUtils.PrintDescription($"Columns: '{KeyHeader}', then one column per language. Every achievement contributes two rows, '<achievement_id>{NameSuffix}' and '<achievement_id>{DescriptionSuffix}', because a translation service wants one string per row.");
+            CommandLinesUtils.PrintDescription($"Columns: '{KeyHeader}', '{LocaleColumns.CommentsColumn}' (which achievement, which field, how long it may be), then one column per language named 'English (United States)(en-US)' - the locale code in the trailing parentheses is what the import reads. Every achievement contributes two rows, '<achievement_id>{NameSuffix}' and '<achievement_id>{DescriptionSuffix}', because a translation service wants one string per row.");
             CommandLinesUtils.PrintDescription("Google never machine translates achievements the way it does the store page, so whatever is not in here is English for everyone.");
             CommandLinesUtils.PrintDescription("Every language the tool can see gets a column, plus every language named in the locales json. The source locales only decide what comes first, they never narrow anything down: source locales, then everything already translated, then the locales json.");
             CommandLinesUtils.PrintDescription("The leading columns are what a translation service reads as its context, so 'en-US, uk, ru' gives it english as the source and ukrainian as the second opinion.");

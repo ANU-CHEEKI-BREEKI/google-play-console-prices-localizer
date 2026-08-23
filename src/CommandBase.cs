@@ -106,7 +106,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 .Select(l => new LocaleColumn(l, l));
 
             var configured = Config.Locales is { Count: > 0 }
-                ? Config.Locales.Select(l => new LocaleColumn(l, l))
+                ? Config.Locales.Select(l => new LocaleColumn(l, l)).ToList()
                 : await LoadLocalesFile(verbose);
 
             var locales = new List<LocaleColumn>();
@@ -116,10 +116,14 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 if (string.IsNullOrWhiteSpace(locale.Locale))
                     continue;
 
-                // the first mention wins, so a locale keeps the column name the file gave it only
-                // when nothing earlier already claimed it
+                // the first mention decides the order, the locales json decides the column name:
+                // indonesian is 'id' to the api whether it was found translated or not, and the csv
+                // must still say 'id-ID' for it
                 if (!locales.Any(l => string.Equals(l.Locale, locale.Locale, StringComparison.OrdinalIgnoreCase)))
-                    locales.Add(locale);
+                {
+                    var alias = configured.FirstOrDefault(c => string.Equals(c.Locale, locale.Locale, StringComparison.OrdinalIgnoreCase));
+                    locales.Add(alias ?? locale);
+                }
             }
 
             return locales;
