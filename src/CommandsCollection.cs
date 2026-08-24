@@ -67,10 +67,6 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             );
 
             CommandLinesUtils.PrintOption(
-                "--prices <path>",
-                "Specifies path to json with default prices in default currency. If not specified, used path from global config json."
-            );
-            CommandLinesUtils.PrintOption(
                 "--region <region>",
                 "Specify the region for which to display prices. Default is US, or region, specified in global config.json"
             );
@@ -80,7 +76,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             );
             CommandLinesUtils.PrintOption(
                 "--products <path>",
-                "Specifies path to the csv with product definitions used by the 'export-iaps' and 'create-iaps' commands. If not specified, used path from global config json ('ProductDefinitionsFilePath'), which defaults to './product-definitions.csv' next to it."
+                "Specifies path to the csv with product definitions, the one source of base prices: 'export-iaps' writes it, 'create-iaps' reads it, and 'restore' and 'localize' take the 'default_price' column from it. If not specified, used path from global config json ('ProductDefinitionsFilePath'), which defaults to './product-definitions.csv' next to it."
             );
             CommandLinesUtils.PrintOption(
                 "--language <code>",
