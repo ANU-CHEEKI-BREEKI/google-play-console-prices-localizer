@@ -68,6 +68,12 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     stringPairs.Add(new StringPairs { A = $"    {config.RegionCode}", B = config.Price.FormattedPrice() });
             }
 
+            if (stringPairs.Count == 0)
+            {
+                Console.WriteLine("   (no products)");
+                return;
+            }
+
             var aMaxLength = stringPairs.Max(p => p.A.Length) + 4;
             var bMaxLength = stringPairs.Max(p => p.B.Length) + 4;
 
@@ -256,6 +262,112 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                && api.HttpStatusCode >= HttpStatusCode.BadRequest
                && api.HttpStatusCode < HttpStatusCode.InternalServerError
                && api.HttpStatusCode != HttpStatusCode.TooManyRequests;
+
+        /// <summary>
+        /// a private copy of an amount. A converted price is shared by every product that has the
+        /// same base price, and a region's percentage is applied by writing into the Money, so what
+        /// a caller edits must never be the object the conversion cache holds
+        /// </summary>
+        public static Money Copy(this Money? money)
+            => new Money
+            {
+                CurrencyCode = money?.CurrencyCode,
+                Units = money?.Units,
+                Nanos = money?.Nanos,
+            };
+
+        /// <summary>
+        /// Google's exchange rates for a set of base prices.
+        /// ConvertRegionPrices answers for an amount, not for a product: a catalog of thirty
+        /// products priced at five distinct amounts needs five requests, not thirty. The distinct
+        /// prices go out a few at a time, and every product then reads its rates out of memory.
+        /// </summary>
+        public static async Task<Dictionary<decimal, ConvertRegionPricesResponse>> ConvertRegionPricesAsync(
+            this AndroidPublisherService service,
+            string package,
+            string currency,
+            IEnumerable<decimal> prices,
+            bool verbose,
+            int parallel = 8
+        )
+        {
+            var distinct = prices.Distinct().ToList();
+            var rates = new Dictionary<decimal, ConvertRegionPricesResponse>();
+
+            if (distinct.Count == 0)
+                return rates;
+
+            Console.WriteLine($"   -> Asking Google for the exchange rates of {distinct.Count} distinct price(s), {Math.Min(parallel, distinct.Count)} at a time...");
+
+            var gate = new SemaphoreSlim(parallel);
+
+            var tasks = distinct.Select(async price =>
+            {
+                await gate.WaitAsync();
+                try
+                {
+                    var units = (long)Math.Floor(price);
+                    var nanos = (int)((price - units) * 1_000_000_000);
+
+                    ConvertRegionPricesResponse? response = null;
+
+                    await ExecuteWithRetryAsync(async () =>
+                    {
+                        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+
+                        var request = new ConvertRegionPricesRequest
+                        {
+                            Price = new Money
+                            {
+                                CurrencyCode = currency,
+                                Units = units,
+                                Nanos = nanos,
+                            }
+                        };
+
+                        response = await service.Monetization
+                            .ConvertRegionPrices(request, package)
+                            .ExecuteAsync(timeout.Token);
+                    }, $"the exchange rates of {price} {currency}");
+
+                    if (verbose)
+                        Console.WriteLine($"      {price} {currency}: {response?.ConvertedRegionPrices?.Count ?? 0} region(s)");
+
+                    return (Price: price, Response: response);
+                }
+                finally
+                {
+                    gate.Release();
+                }
+            }).ToList();
+
+            foreach (var (price, response) in await Task.WhenAll(tasks))
+            {
+                if (response is not null)
+                    rates[price] = response;
+            }
+
+            return rates;
+        }
+
+        /// <summary>
+        /// the converted price of one region, as a copy. Google answers per region for the regions
+        /// it knows and falls back to a usd/eur pair for the rest, and the region keeps whichever
+        /// of the two its current price is already in
+        /// </summary>
+        public static Money PriceFor(this ConvertRegionPricesResponse converted, OneTimeProductPurchaseOptionRegionalPricingAndAvailabilityConfig oldConfig)
+        {
+            if (converted.ConvertedRegionPrices is not null
+                && converted.ConvertedRegionPrices.TryGetValue(oldConfig.RegionCode, out var regionPrice)
+                && regionPrice?.Price is not null)
+                return regionPrice.Price.Copy();
+
+            var other = converted.ConvertedOtherRegionsPrice;
+
+            return oldConfig.Price?.CurrencyCode == other?.UsdPrice?.CurrencyCode
+                ? other?.UsdPrice.Copy() ?? new Money()
+                : other?.EurPrice.Copy() ?? new Money();
+        }
 
         /// <summary>
         /// the SDK ships no constants for these enums, these are the REST values

@@ -25,6 +25,15 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         /// </summary>
         public string IapFilter => Args.TryGetOption("--iap", "");
 
+        /// <summary>
+        /// how many products go to Google at once. Google needs about two minutes per product no
+        /// matter how the update is sent, so this is what decides the wall clock of a price run
+        /// </summary>
+        protected int Parallelism(int fallback = 8)
+            => int.TryParse(Args.TryGetOption("--parallel", ""), out var parsed)
+                ? Math.Clamp(parsed, 1, 16)
+                : fallback;
+
         public abstract string Name { get; }
         public abstract string Description { get; }
 

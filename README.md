@@ -38,21 +38,22 @@ And all prices will be localized!
     {
         "PackageName": "com.MyApp.Package",
         "CredentialsFilePath": "./oauth_client_credentials.json",
-        "DefaultPricesFilePath": "./default-prices.json",
+        "ProductDefinitionsFilePath": "./product-definitions.csv",
         "DefaultCurrency": "USD"
     }
 
-`CredentialsFilePath` and `DefaultPricesFilePath` are relative to `config.json`
+`CredentialsFilePath` and `ProductDefinitionsFilePath` are relative to `config.json`
 
 **About Credentials [HERE](#The-pain-in-the-ass)**
 
-There are example of default-prices.json<br>
-Prices are in `DefaultCurrency` specified in `config.json` - in this example its (USD) 
+Base prices come from the `default_price` column of `product-definitions.csv` - the same file
+`export-iaps` writes and `create-iaps` reads, so every command shares one source of prices.
+No csv yet? Run `export-iaps` once and it is created from what the store has now.
+Prices are in `DefaultCurrency` specified in `config.json` - in this example its (USD)
 
-    {
-        "crystals_1": 10,
-        "crystals_6": 50,
-    }
+    product_id,default_price,title,description
+    crystals_1,10,"Handful of crystals","A small pile of crystals."
+    crystals_6,50,"Bag of crystals","A big bag of crystals."
 
 ---
 
@@ -71,11 +72,21 @@ In the file `localized-prices-template.json`, there are multipliers for each cou
         //...
     }
 
-- The program retrieves a list of all IAPs using the [Google Play Developer APIs](https://developers.google.com/android-publisher), resets their prices to the default price (just like you can do manually in the Google Play Console by clicking on "Update Exchange Rate").
+- The program retrieves a list of all IAPs using the [Google Play Developer APIs](https://developers.google.com/android-publisher), and takes each product's base price from the `default_price` column of `product-definitions.csv` (run `export-iaps` once to create it). This is the price you can also set manually in the Google Play Console by clicking on "Update Exchange Rate".
 - Then, the program multiplies the local prices by the corresponding multipliers from the `localized-prices-template.json` file.
 - After that, the prices are rounded.
 - Then, 0.01 is subtracted from the price to make round prices like `10$` become `9.99$`.
 - Finally, the program uses the [Google Play Developer APIs](https://developers.google.com/android-publisher) to update the IAPs in your project on the Google Play Console.
+
+`localize` does not need a `restore` first, and never did: the base price is read from the csv,
+not from the store, so the localized prices are the only thing it writes. `restore` is the command
+for the other case - putting the plain converted default prices back, without the template.
+Do not run the two at the same time, they write the same products.
+
+The exchange rates are asked once per distinct price instead of once per product, the products are
+sent to Google several at a time, and only the products that actually got new prices are sent at
+all. `--parallel <n>` (1 to 16, default 8) decides how many go at once - Google needs about two
+minutes per product, so that number is what decides how long the run takes.
 
 ---
 
@@ -130,7 +141,10 @@ profile, and finally `../config.json`.
     To simply list all IAPs in your project. `-l` To print all local prices, instead of only default prices.
 
 `restore [-v] [-l]`
-    To reset all local prices to the default prices. `-v` To see IAPs lists during restoring, `-l` to also see local prices
+    To reset all local prices to the default prices from the `default_price` column of `product-definitions.csv`, without the percentage template. `-v` To see IAPs lists during restoring, `-l` to also see local prices
+
+`--parallel <n>`
+    Works with `restore` and `localize`: how many products go to Google at once, 1 to 16, default 8.
 
 `--iap <id[,id...]>`
     Works with every command that touches products: run it only for these product ids, comma separated.
@@ -388,7 +402,7 @@ consent: that API uses the same `androidpublisher` scope as everything else here
 1. You open the command line in the project folder.
 1. You downloaded and placed the `client_credentials.json` file with the `client secrets` in the folder next to the project folder.
 1. you created and placed the `config.json` file in the folder next to the project folder.
-1. you created and placed the `default-prices-in-local-currency.json` file in the folder next to the project folder.
+1. you ran `dotnet run -- export-iaps` once, which created `product-definitions.csv` next to `config.json`, and you checked the `default_price` column in it.
 1. The app for which you want to localize prices has the package name `com.MyApp.Package`.
 
 your config.json
@@ -396,16 +410,15 @@ your config.json
     {
         "PackageName": "com.MyApp.Package",
         "CredentialsFilePath": "./oauth_client_credentials.json",
-        "DefaultPricesFilePath": "./default-prices.json",
+        "ProductDefinitionsFilePath": "./product-definitions.csv",
         "DefaultCurrency": "USD"
     }
 
-your default-prices.json
+your product-definitions.csv
 
-    {
-        "crystals_1": 10,
-        "crystals_6": 50,
-    }
+    product_id,default_price,title,description
+    crystals_1,10,"Handful of crystals","A small pile of crystals."
+    crystals_6,50,"Bag of crystals","A big bag of crystals."
 
 You opened Project in visual studio code and opened terminal.
 Then, your commands will likely look like this:

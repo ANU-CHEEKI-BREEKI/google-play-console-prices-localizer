@@ -2,8 +2,7 @@ public class Config
 {
     public string PackageName { get; set; } = "";
     public string CredentialsFilePath { get; set; } = "";
-    public string DefaultPricesFilePath { get; set; } = "";
-    
+
     public string LocalizedPricesTemplateFilePath { get; set; } = "";
     public string RoundPricesForFilePath { get; set; } = "";
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Newtonsoft.Json;
 
 public static class CommandLinesUtils
@@ -62,6 +63,42 @@ public static class CommandLinesUtils
     /// </summary>
     public static async Task<List<Dictionary<string, string>>> LoadCsv(string path, string fallbackPath, bool logToConsole)
         => (await LoadCsvTable(path, fallbackPath, logToConsole)).Rows;
+
+    /// <summary>
+    /// the product_id -> default_price pairs of the product definitions csv, the same file
+    /// 'export-iaps' writes and 'create-iaps' reads. Null when the csv does not exist yet:
+    /// prices have no source until 'export-iaps' has run once
+    /// </summary>
+    public static async Task<ProductConfigs?> LoadBasePrices(string path, bool logToConsole)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            Console.WriteLine($"[ERROR] product definitions csv not found: '{path}'");
+            Console.WriteLine("        base prices live in its 'default_price' column.");
+            Console.WriteLine("        run 'export-iaps' once to create the csv from the store, check the prices in it, then run this command again.");
+            Console.WriteLine("        set 'ProductDefinitionsFilePath' in your config.json, or pass --products <path>.");
+            return null;
+        }
+
+        var prices = new ProductConfigs();
+
+        foreach (var row in await LoadCsv(path, path, logToConsole))
+        {
+            var productId = row.GetValueOrDefault("product_id", "");
+            var rawPrice = row.GetValueOrDefault("default_price", "");
+
+            if (string.IsNullOrWhiteSpace(productId) || string.IsNullOrWhiteSpace(rawPrice))
+                continue;
+
+            // the comma replace handles the european decimal separator spreadsheets export
+            if (decimal.TryParse(rawPrice.Replace(",", "."), NumberStyles.Any, CultureInfo.InvariantCulture, out var price))
+                prices[productId] = price;
+            else
+                Console.WriteLine($"[SKIP] {productId}: can not parse default_price '{rawPrice}' in the csv.");
+        }
+
+        return prices;
+    }
 
     /// <summary>
     /// same as <see cref="LoadCsv"/>, but also gives back the header row with its original casing

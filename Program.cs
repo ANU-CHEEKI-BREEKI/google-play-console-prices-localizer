@@ -92,7 +92,6 @@ var absoluteConfigPath = Path.GetFullPath(resolvedPathGetter.ResolvedPath);
 var configDirectory = Path.GetDirectoryName(absoluteConfigPath);
 
 config.CredentialsFilePath = Path.Combine(configDirectory, config.CredentialsFilePath);
-config.DefaultPricesFilePath = Path.Combine(configDirectory, config.DefaultPricesFilePath);
 config.LocalizedPricesTemplateFilePath = Path.Combine(configDirectory, config.LocalizedPricesTemplateFilePath);
 config.RoundPricesForFilePath = Path.Combine(configDirectory, config.RoundPricesForFilePath);
 config.ProductDefinitionsFilePath = Path.Combine(configDirectory, config.ProductDefinitionsFilePath);
@@ -105,7 +104,6 @@ config.VitalsOutputPath = Path.Combine(configDirectory, config.VitalsOutputPath)
 // patch config with explicit command line options
 config.PackageName = args.TryGetOption("--package", config.PackageName);
 config.CredentialsFilePath = args.TryGetOption("--credentials", config.CredentialsFilePath);
-config.DefaultPricesFilePath = args.TryGetOption("--prices", config.DefaultPricesFilePath);
 
 config.LocalizedPricesTemplateFilePath = args.TryGetOption("--localized-template", config.LocalizedPricesTemplateFilePath);
 config.RoundPricesForFilePath = args.TryGetOption("--round-prices", config.RoundPricesForFilePath);

@@ -8,24 +8,20 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         {
             try
             {
-                var verbose = Args.Contains("-v");
-                var printLocalPrices = Args.Contains("-l");
+                var verbose = Args.HasFlag("-v");
+                var printLocalPrices = Args.HasFlag("-l");
 
                 Console.WriteLine("loading default prices...");
 
-                var defaultPrices = await CommandLinesUtils.LoadJson<ProductConfigs>(Config.DefaultPricesFilePath, Config.DefaultPricesFilePath, verbose);
-                if (defaultPrices == null)
-                {
-                    Console.WriteLine($"Failed to load default prices from {Config.DefaultPricesFilePath}");
+                var defaultPrices = await CommandLinesUtils.LoadBasePrices(Config.ProductDefinitionsFilePath, verbose);
+                if (defaultPrices is null)
                     return;
-                }
 
                 Console.WriteLine("receiving IAP list...");
 
-                var listRequest = Service.Monetization.Onetimeproducts.List(Package);
-                var listResponse = await listRequest.ExecuteAsync();
-
-                var products = listResponse.OneTimeProducts.Filter(IapFilter).ToList();
+                var products = (await Service!.Monetization.Onetimeproducts.ListAllAsync(Package))
+                    .Filter(IapFilter)
+                    .ToList();
 
                 if (verbose)
                 {
@@ -35,88 +31,60 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                 Console.WriteLine("resetting prices to default...");
 
-                foreach (var product in products)
+                var planned = PlanPrices(products, defaultPrices);
+                if (planned.Count == 0)
                 {
-                    var legacyOption = product.PurchaseOptions
-                        ?.FirstOrDefault(po => po.BuyOption?.LegacyCompatible == true);
+                    Console.WriteLine("nothing to restore.");
+                    return;
+                }
 
-                    if (legacyOption is null)
-                        continue;
+                // every product with the same base price gets the very same exchange rates,
+                // so the rates are fetched once per distinct price instead of once per product
+                var rates = await Service.ConvertRegionPricesAsync(
+                    Package,
+                    Config.DefaultCurrency ?? "USD",
+                    planned.Select(p => p.Price),
+                    verbose,
+                    Parallelism()
+                );
 
-                    if (!defaultPrices.TryGetValue(product.ProductId, out var defaultPrice))
+                var updated = new List<OneTimeProduct>();
+
+                foreach (var (product, option, price) in planned)
+                {
+                    if (!rates.TryGetValue(price, out var converted))
                     {
-                        Console.WriteLine($"Warning: No default price for {product.ProductId}");
+                        Console.WriteLine($"Failed to convert prices for {product.ProductId}, it keeps its current prices.");
                         continue;
                     }
 
-                    // make from 10$ 9.99%
-                    // YES google can make it on their side, but NOT not countries there local currency not supported
-                    // so lets make sure here that  price in EVERY country not rounded
-                    if (Math.Truncate(defaultPrice) == defaultPrice)
-                        defaultPrice -= 0.01m;
-
-                    var units = (long)Math.Floor(defaultPrice);
-                    var nanos = (int)((defaultPrice - units) * 1_000_000_000);
-
-                    var baseMoney = new Money
-                    {
-                        CurrencyCode = Config.DefaultCurrency ?? "USD",
-                        Units = units,
-                        Nanos = nanos
-                    };
-
-                    try
-                    {
-                        if (verbose)
-                            Console.WriteLine($"Calculating exchange rates for {product.ProductId}...");
-
-                        var convertRequest = new ConvertRegionPricesRequest
-                        {
-                            Price = baseMoney,
-                        };
-
-                        var convertResponse = await Service.Monetization
-                            .ConvertRegionPrices(convertRequest, Package)
-                            .ExecuteAsync();
-
-                        var newConfigs = new List<OneTimeProductPurchaseOptionRegionalPricingAndAvailabilityConfig>();
-                        foreach (var oldConfig in legacyOption.RegionalPricingAndAvailabilityConfigs)
-                        {
-                            var newPrice = convertResponse.ConvertedRegionPrices.TryGetValue(oldConfig.RegionCode, out var price)
-                                ? price.Price
-                                : oldConfig.Price.CurrencyCode == convertResponse.ConvertedOtherRegionsPrice.UsdPrice.CurrencyCode
-                                    ? convertResponse.ConvertedOtherRegionsPrice.UsdPrice
-                                    : convertResponse.ConvertedOtherRegionsPrice.EurPrice;
-
-                            var newConfig = new OneTimeProductPurchaseOptionRegionalPricingAndAvailabilityConfig
+                    option.RegionalPricingAndAvailabilityConfigs =
+                    [
+                        .. option.RegionalPricingAndAvailabilityConfigs.Select(oldConfig =>
+                            new OneTimeProductPurchaseOptionRegionalPricingAndAvailabilityConfig
                             {
                                 Availability = oldConfig.Availability,
                                 RegionCode = oldConfig.RegionCode,
                                 ETag = oldConfig.ETag,
 
-                                Price = newPrice,
-                            };
-                            newConfigs.Add(newConfig);
-                        }
+                                Price = converted.PriceFor(oldConfig),
+                            })
+                    ];
 
-                        // Apply the full list of regions
-                        legacyOption.RegionalPricingAndAvailabilityConfigs = newConfigs;
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Failed to convert prices for {product.ProductId}: {ex.Message}");
-                    }
+                    updated.Add(product);
                 }
 
                 if (verbose)
                 {
                     Console.WriteLine("Local updated prices:");
-                    products.PrintIapList(false, Config.DefaultRegion);
+                    updated.PrintIapList(false, Config.DefaultRegion);
                 }
 
                 Console.WriteLine("Sending IAP to Google Play Console...");
 
-                var ok = await products.SendWithRetryAsync(Service, Package, sensitive: Args.HasFlag("--sensitive"));
+                // only the products this run actually recalculated: patching an untouched
+                // product would still cost its two minutes of Google's time
+                var ok = await updated.SendWithRetryAsync(Service, Package, sensitive: Args.HasFlag("--sensitive"), parallel: Parallelism());
                 if (!ok)
                     Console.WriteLine("some products were NOT updated, see the errors above.");
 
@@ -125,10 +93,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     Console.WriteLine("updated IAP");
 
                     // Fetch the updated list
-                    var updatedListRequest = Service!.Monetization.Onetimeproducts.List(Package);
-                    var updatedListResponse = await updatedListRequest.ExecuteAsync();
-                    updatedListResponse
-                        .OneTimeProducts
+                    (await Service.Monetization.Onetimeproducts.ListAllAsync(Package))
                         .Filter(IapFilter)
                         .PrintIapList(printLocalPrices, Config.DefaultRegion);
                 }
@@ -139,28 +104,70 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             }
         }
 
+        /// <summary>
+        /// the products that have both a purchase option to write to and a base price to write,
+        /// with the price already lowered the way Google Play needs it.
+        /// </summary>
+        internal static List<(OneTimeProduct Product, OneTimeProductPurchaseOption Option, decimal Price)> PlanPrices(
+            IEnumerable<OneTimeProduct> products,
+            ProductConfigs defaultPrices
+        )
+        {
+            var planned = new List<(OneTimeProduct, OneTimeProductPurchaseOption, decimal)>();
+
+            foreach (var product in products)
+            {
+                var legacyOption = product.LegacyOption();
+
+                if (legacyOption is null)
+                    continue;
+
+                if (!defaultPrices.TryGetValue(product.ProductId, out var defaultPrice))
+                {
+                    Console.WriteLine($"Warning: No default_price for {product.ProductId} in the product definitions csv.");
+                    continue;
+                }
+
+                // make from 10$ 9.99%
+                // YES google can make it on their side, but NOT not countries there local currency not supported
+                // so lets make sure here that  price in EVERY country not rounded
+                if (Math.Truncate(defaultPrice) == defaultPrice)
+                    defaultPrice -= 0.01m;
+
+                planned.Add((product, legacyOption, defaultPrice));
+            }
+
+            return planned;
+        }
+
         public override string Name => "restore";
-        public override string Description => "Recalculates prices for all regions based on the default currency price provided in your JSON config.";
+        public override string Description => "Recalculates prices for all regions based on the 'default_price' column of the product definitions csv.";
 
         public override void PrintHelp()
         {
-            Console.WriteLine("restore [--prices <path-to-default-prices.json>] [--iap <id[,id...]>] [--sensitive] [-v] [-l]");
+            Console.WriteLine("restore [--products <path-to-product-definitions.csv>] [--iap <id[,id...]>] [--parallel <n>] [--sensitive] [-v] [-l]");
             Console.WriteLine();
             Console.WriteLine();
 
             Console.WriteLine("description:");
             CommandLinesUtils.PrintDescription(Description);
+            CommandLinesUtils.PrintDescription("Base prices come from the same csv 'export-iaps' writes and 'create-iaps' reads. Run 'export-iaps' once if you do not have it yet.");
+            CommandLinesUtils.PrintDescription("Google's exchange rates are asked once per distinct price, not once per product, and only the products that actually got new prices are sent.");
 
             Console.WriteLine();
             Console.WriteLine("options:");
 
             CommandLinesUtils.PrintOption(
-                "--prices <path>",
-                "Specifies path to json with default prices in default currency. If not specified, used path from global config json."
+                "--products <path>",
+                "Specifies path to the product definitions csv the base prices are read from. If not specified, used path from global config json ('ProductDefinitionsFilePath'), which defaults to './product-definitions.csv' next to it."
             );
             CommandLinesUtils.PrintOption(
                 CommandLinesUtils.IapOptionName,
                 CommandLinesUtils.IapOptionDescription
+            );
+            CommandLinesUtils.PrintOption(
+                "--parallel <n>",
+                "How many products go to Google at once, 1 to 16. Default is 8. Google needs about two minutes per product, so this is what decides how long the run takes."
             );
             CommandLinesUtils.PrintOption(
                 "--sensitive",
@@ -179,4 +186,3 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         }
     }
 }
-
