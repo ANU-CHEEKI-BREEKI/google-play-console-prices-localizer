@@ -50,8 +50,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                 Console.WriteLine("calculating localized prices...");
 
-                var planned = Command_Restore.PlanPrices(products, defaultPrices);
-                if (planned.Count == 0)
+                var plan = Command_Restore.PlanPrices(products, defaultPrices);
+                if (plan.Items.Count == 0)
                 {
                     Console.WriteLine("nothing to localize.");
                     return;
@@ -62,18 +62,19 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 var rates = await Service.ConvertRegionPricesAsync(
                     Package,
                     Config.DefaultCurrency ?? "USD",
-                    planned.Select(p => p.Price),
+                    plan.Items.Select(p => p.Price),
                     verbose,
                     Parallelism()
                 );
 
                 var updated = new List<OneTimeProduct>();
 
-                foreach (var (product, option, price) in planned)
+                foreach (var (product, option, price) in plan.Items)
                 {
                     if (!rates.TryGetValue(price, out var converted))
                     {
                         Console.WriteLine($"Failed to convert prices for {product.ProductId}, it keeps its current prices.");
+                        plan.NoRates.Add(product.ProductId);
                         continue;
                     }
 
@@ -130,9 +131,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                 // only the products this run actually recalculated: patching an untouched
                 // product would still cost its two minutes of Google's time
-                var ok = await updated.SendWithRetryAsync(Service, Package, sensitive: Args.HasFlag("--sensitive"), parallel: Parallelism());
-                if (!ok)
-                    Console.WriteLine("some products were NOT updated, see the errors above.");
+                var sent = await updated.SendWithRetryAsync(Service, Package, sensitive: Args.HasFlag("--sensitive"), parallel: Parallelism());
 
                 if (verbose)
                 {
@@ -143,6 +142,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                         .Filter(IapFilter)
                         .PrintIapList(printLocalPrices, Config.DefaultRegion);
                 }
+
+                Command_Restore.PrintSummary(Name, plan, rates.Count, sent);
             }
             catch (Exception ex)
             {

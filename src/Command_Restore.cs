@@ -31,8 +31,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                 Console.WriteLine("resetting prices to default...");
 
-                var planned = PlanPrices(products, defaultPrices);
-                if (planned.Count == 0)
+                var plan = PlanPrices(products, defaultPrices);
+                if (plan.Items.Count == 0)
                 {
                     Console.WriteLine("nothing to restore.");
                     return;
@@ -43,18 +43,19 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 var rates = await Service.ConvertRegionPricesAsync(
                     Package,
                     Config.DefaultCurrency ?? "USD",
-                    planned.Select(p => p.Price),
+                    plan.Items.Select(p => p.Price),
                     verbose,
                     Parallelism()
                 );
 
                 var updated = new List<OneTimeProduct>();
 
-                foreach (var (product, option, price) in planned)
+                foreach (var (product, option, price) in plan.Items)
                 {
                     if (!rates.TryGetValue(price, out var converted))
                     {
                         Console.WriteLine($"Failed to convert prices for {product.ProductId}, it keeps its current prices.");
+                        plan.NoRates.Add(product.ProductId);
                         continue;
                     }
 
@@ -84,9 +85,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                 // only the products this run actually recalculated: patching an untouched
                 // product would still cost its two minutes of Google's time
-                var ok = await updated.SendWithRetryAsync(Service, Package, sensitive: Args.HasFlag("--sensitive"), parallel: Parallelism());
-                if (!ok)
-                    Console.WriteLine("some products were NOT updated, see the errors above.");
+                var sent = await updated.SendWithRetryAsync(Service, Package, sensitive: Args.HasFlag("--sensitive"), parallel: Parallelism());
 
                 if (verbose)
                 {
@@ -97,6 +96,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                         .Filter(IapFilter)
                         .PrintIapList(printLocalPrices, Config.DefaultRegion);
                 }
+
+                PrintSummary(Name, plan, rates.Count, sent);
             }
             catch (Exception ex)
             {
@@ -105,26 +106,48 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         }
 
         /// <summary>
-        /// the products that have both a purchase option to write to and a base price to write,
-        /// with the price already lowered the way Google Play needs it.
+        /// what a price run found before it talked to Google: the products it can write, and the
+        /// ones it cannot, kept apart so the summary at the end can name them
         /// </summary>
-        internal static List<(OneTimeProduct Product, OneTimeProductPurchaseOption Option, decimal Price)> PlanPrices(
-            IEnumerable<OneTimeProduct> products,
-            ProductConfigs defaultPrices
-        )
+        internal class PricePlan
         {
-            var planned = new List<(OneTimeProduct, OneTimeProductPurchaseOption, decimal)>();
+            /// <summary>ready to write: a purchase option, and a base price already lowered the way Google Play needs it</summary>
+            public List<(OneTimeProduct Product, OneTimeProductPurchaseOption Option, decimal Price)> Items { get; } = [];
+
+            /// <summary>no backward compatible purchase option, there is nothing on the product to price</summary>
+            public List<string> NoOption { get; } = [];
+
+            /// <summary>not in the product definitions csv, or its default_price cell is empty</summary>
+            public List<string> NoPrice { get; } = [];
+
+            /// <summary>Google did not answer with exchange rates for its price, so it keeps the old ones</summary>
+            public List<string> NoRates { get; } = [];
+
+            public int Skipped => NoOption.Count + NoPrice.Count + NoRates.Count;
+        }
+
+        /// <summary>
+        /// the products that have both a purchase option to write to and a base price to write.
+        /// </summary>
+        internal static PricePlan PlanPrices(IEnumerable<OneTimeProduct> products, ProductConfigs defaultPrices)
+        {
+            var plan = new PricePlan();
 
             foreach (var product in products)
             {
                 var legacyOption = product.LegacyOption();
 
                 if (legacyOption is null)
+                {
+                    Console.WriteLine($"Warning: {product.ProductId} has no backward compatible purchase option, nothing to price.");
+                    plan.NoOption.Add(product.ProductId);
                     continue;
+                }
 
                 if (!defaultPrices.TryGetValue(product.ProductId, out var defaultPrice))
                 {
                     Console.WriteLine($"Warning: No default_price for {product.ProductId} in the product definitions csv.");
+                    plan.NoPrice.Add(product.ProductId);
                     continue;
                 }
 
@@ -134,10 +157,44 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 if (Math.Truncate(defaultPrice) == defaultPrice)
                     defaultPrice -= 0.01m;
 
-                planned.Add((product, legacyOption, defaultPrice));
+                plan.Items.Add((product, legacyOption, defaultPrice));
             }
 
-            return planned;
+            return plan;
+        }
+
+        /// <summary>
+        /// The few lines that say what the run did. Everything above them scrolls past while
+        /// Google takes its two minutes per product, so this is the part that has to be readable.
+        /// </summary>
+        internal static void PrintSummary(string command, PricePlan plan, int distinctPrices, Extensions.SendReport sent)
+        {
+            Console.WriteLine();
+            Console.WriteLine("summary:");
+            Console.WriteLine($"   updated:         {sent.Updated}");
+            Console.WriteLine($"   failed:          {sent.Failed.Count}");
+            Console.WriteLine($"   skipped:         {plan.Skipped}");
+
+            foreach (var (reason, ids) in new[]
+            {
+                ("no purchase option", plan.NoOption),
+                ("no default_price in the csv", plan.NoPrice),
+                ("no exchange rates from Google", plan.NoRates),
+            })
+            {
+                foreach (var id in ids)
+                    Console.WriteLine($"      -> {id} ({reason})");
+            }
+
+            Console.WriteLine($"   exchange rates:  {distinctPrices} request(s) for {plan.Items.Count} product(s)");
+            Console.WriteLine($"   time sending:    {sent.Elapsed.Human()}, {sent.Parallel} product(s) at a time");
+
+            if (sent.Failed.Count == 0)
+                return;
+
+            Console.WriteLine();
+            Console.WriteLine($"[RETRY] {sent.Failed.Count} product(s) failed. Nothing was half-written: a product either got its whole new price schedule or kept the old one. Run again for just them:");
+            Console.WriteLine($"        dotnet run -- {command} --iap {string.Join(",", sent.Failed.Distinct())}");
         }
 
         public override string Name => "restore";

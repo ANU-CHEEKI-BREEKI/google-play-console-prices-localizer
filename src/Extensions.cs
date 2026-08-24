@@ -452,10 +452,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         /// LATENCY_TOLERANT by default: the change can take up to 24 hours to reach devices,
         /// pass sensitive=true when that matters.
         /// </summary>
-        public static async Task<bool> SendWithRetryAsync(this IList<OneTimeProduct> products, AndroidPublisherService service, string package, bool sensitive = false, int parallel = 8)
+        public static async Task<SendReport> SendWithRetryAsync(this IList<OneTimeProduct> products, AndroidPublisherService service, string package, bool sensitive = false, int parallel = 8)
         {
             if (products.Count == 0)
-                return true;
+                return new SendReport(0, [], TimeSpan.Zero, parallel);
 
             Console.WriteLine($"   -> Sending {products.Count} product(s), {Math.Min(parallel, products.Count)} at a time ({(sensitive ? "latency sensitive" : "latency tolerant")})...");
             Console.WriteLine("      Google takes about two minutes per product, this is normal.");
@@ -484,7 +484,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                     var n = Interlocked.Increment(ref done);
                     Console.WriteLine($"      {(ok ? "updated" : "FAILED ")} {product.ProductId}  ({n}/{products.Count}, {watch.Elapsed.TotalSeconds:0}s)");
-                    return ok;
+                    return ok ? null : product.ProductId;
                 }
                 finally
                 {
@@ -496,10 +496,25 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             var results = await Task.WhenAll(tasks);
             await heartbeat;
 
-            return results.All(r => r);
+            return new SendReport(products.Count, [.. results.Where(id => id is not null)!], watch.Elapsed, Math.Min(parallel, products.Count));
         }
 
-        private static async Task Heartbeat(Stopwatch watch, Func<string> status, List<Task<bool>> tasks)
+        /// <summary>
+        /// what one send run did, so the command can print a summary instead of leaving the
+        /// reader to count the lines that scrolled by
+        /// </summary>
+        public record SendReport(int Sent, List<string> Failed, TimeSpan Elapsed, int Parallel)
+        {
+            public int Updated => Sent - Failed.Count;
+        }
+
+        /// <summary>a duration a human reads at a glance: "12m 40s", not "760,3s"</summary>
+        public static string Human(this TimeSpan time)
+            => time.TotalMinutes >= 1
+                ? $"{(int)time.TotalMinutes}m {time.Seconds:00}s"
+                : $"{time.TotalSeconds:0.0}s";
+
+        private static async Task Heartbeat<T>(Stopwatch watch, Func<string> status, List<Task<T>> tasks)
         {
             while (!tasks.All(t => t.IsCompleted))
             {
