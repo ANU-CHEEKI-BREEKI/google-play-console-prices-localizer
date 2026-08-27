@@ -120,7 +120,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("locales export release-notes [--track <name>] [--release draft|latest|live|<versionCode>] [--csv <path>] [--source-locales <code[,code...]>] [--locales-file <path>] [--locales <code[,code...]>] [-v]");
+            Console.WriteLine("locales export release-notes [--track <name>] [--release draft|latest|live|<versionCode>] [--csv <path>] [--source-locales <code[,code...]>] [--locales-file <path>] [--locales <code[,code...]>] [--all-locales] [-v]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -128,7 +128,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintDescription(Description);
             CommandLinesUtils.PrintDescription($"Columns: '{LocaleColumns.KeyColumn}', '{LocaleColumns.CommentsColumn}', then one column per language named 'English (United States)(en-US)' - the locale code in the trailing parentheses is what the import reads. There is exactly one row, '{NotesKey}', because a release has exactly one string to translate.");
             CommandLinesUtils.PrintDescription("Read only: the edit it opens to reach the track is discarded, nothing in the console changes.");
-            CommandLinesUtils.PrintDescription("Every language the release already has notes in gets a column, plus every language named in the locales json. The source locales only decide what comes first, they never narrow anything down.");
+            CommandLinesUtils.PrintDescription("By default only languages the release already has notes in get a column, in the order the locales json names them. The source locales lead and are always there, even empty. --all-locales adds a column for every entry of the locales json - remember Google only accepts notes in languages the store listing has.");
             CommandLinesUtils.PrintDescription("An existing csv at the target path is overwritten.");
 
             Console.WriteLine();
@@ -152,11 +152,15 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             );
             CommandLinesUtils.PrintOption(
                 "--locales-file <path>",
-                "Specifies path to the json with every locale to produce a column for. Default is the path from global config json ('LocalesFilePath'), './locales.json' next to it."
+                "Specifies path to the json that orders the columns and, with --all-locales, names the extra ones. Default is the path from global config json ('LocalesFilePath'), './locales.json' next to it."
             );
             CommandLinesUtils.PrintOption(
                 "--locales <code[,code...]>",
-                "Locales to export columns for, for this run only. Overrides the whole locales json file."
+                "Locales to export columns for, for this run only, empty or not. Overrides the whole locales json file."
+            );
+            CommandLinesUtils.PrintOption(
+                "--all-locales",
+                "Also produce a column for every locale in the locales json, even ones with no notes yet."
             );
             CommandLinesUtils.PrintOption(
                 "-v",

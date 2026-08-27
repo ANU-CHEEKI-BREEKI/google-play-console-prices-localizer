@@ -162,7 +162,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("locales export achievements [--csv <path>] [--source-locales <code[,code...]>] [--locales-file <path>] [--locales <code[,code...]>] [--games-project <id>] [-v]");
+            Console.WriteLine("locales export achievements [--csv <path>] [--source-locales <code[,code...]>] [--locales-file <path>] [--locales <code[,code...]>] [--all-locales] [--games-project <id>] [-v]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -170,9 +170,9 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintDescription(Description);
             CommandLinesUtils.PrintDescription($"Columns: '{KeyHeader}', '{LocaleColumns.CommentsColumn}' (which achievement, which field, how long it may be), then one column per language named 'English (United States)(en-US)' - the locale code in the trailing parentheses is what the import reads. Every achievement contributes two rows, '<achievement_id>{NameSuffix}' and '<achievement_id>{DescriptionSuffix}', because a translation service wants one string per row.");
             CommandLinesUtils.PrintDescription("Google never machine translates achievements the way it does the store page, so whatever is not in here is English for everyone.");
-            CommandLinesUtils.PrintDescription("Every language the tool can see gets a column, plus every language named in the locales json. The source locales only decide what comes first, they never narrow anything down: source locales, then everything already translated, then the locales json.");
+            CommandLinesUtils.PrintDescription("By default only languages something is already translated into get a column, in the order the locales json names them. The source locales lead and are always there, even empty. --all-locales adds a column for every entry of the locales json, for when new languages are being added.");
             CommandLinesUtils.PrintDescription("The leading columns are what a translation service reads as its context, so 'en-US, uk, ru' gives it english as the source and ukrainian as the second opinion.");
-            CommandLinesUtils.PrintDescription("Play Games Services hides a language until something is translated into it, and its api has no language list at all. So a language you added in the console and have not filled in yet is invisible here until the locales json names it. That empty column is the work.");
+            CommandLinesUtils.PrintDescription("Play Games Services hides a language until something is translated into it, and its api has no language list at all. So a language you added in the console and have not filled in yet only shows up with --all-locales, or named in --locales. That empty column is the work.");
             CommandLinesUtils.PrintDescription("Exported from the draft version, the one the console edits, falling back to the published one for an achievement never touched since it went live. Points, type, steps and icons are not exported and never change.");
             CommandLinesUtils.PrintDescription("Rows are in the console's own order, by sort rank. An existing csv at the target path is overwritten.");
 
@@ -189,11 +189,15 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             );
             CommandLinesUtils.PrintOption(
                 "--locales-file <path>",
-                "Specifies path to the json with every locale to produce a column for. Default is the path from global config json ('LocalesFilePath'), './locales.json' next to it."
+                "Specifies path to the json that orders the columns and, with --all-locales, names the extra ones. Default is the path from global config json ('LocalesFilePath'), './locales.json' next to it."
             );
             CommandLinesUtils.PrintOption(
                 "--locales <code[,code...]>",
-                "Locales to export columns for, for this run only. Overrides the whole locales json file. Use the codes Play Games Services itself uses, see 'locales list' - they are not always the ones the store page uses."
+                "Locales to export columns for, for this run only, empty or not. Overrides the whole locales json file. Use the codes Play Games Services itself uses, see 'locales list' - they are not always the ones the store page uses."
+            );
+            CommandLinesUtils.PrintOption(
+                "--all-locales",
+                "Also produce a column for every locale in the locales json, even ones with nothing translated yet. This is how a new language is started: translate into the empty column and import."
             );
             CommandLinesUtils.PrintOption(
                 "--games-project <id>",

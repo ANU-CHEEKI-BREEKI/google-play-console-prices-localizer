@@ -373,17 +373,23 @@ Two settings, both shared by all four subcommands:
     // locales.json, next to it
     [ "en-US", "uk", "de-DE", { "id": "id-ID" }, "iw-IL" ]
 
-`SourceLocales` only decides **what comes first**, never what is included. A translation service reads the
-leading columns as its context, so the order decides what it sees.
+**By default an export only produces columns for languages that already exist** - the ones something is
+actually translated into. `locales.json` orders them and `SourceLocales` decides what comes first; a
+translation service reads the leading columns as its context, so the order decides what it sees. The
+source locales are always exported, even empty.
 
-`locales.json` is the list of every language you want a column for. It has to be written by hand: Play
-Games Services hides a language until something is translated into it and offers no API for the list, so a
-language you added in the console and have not filled in yet is invisible. The object form is for when the
-code Google wants and the column name must differ - PGS calls indonesian `id`, which a translation service
-reads as an *identifier* column, so the csv says `id-ID` while the API still gets `id`.
+**`--all-locales` adds an empty column for every entry of `locales.json`.** That is how a new language is
+started: it has to be written by hand because empty languages cannot be discovered - Play Games Services
+hides a language until something is translated into it and offers no API for the list. Translate into the
+empty column, import, and the language exists.
 
-Order: `SourceLocales`, then everything already translated, then `locales.json`. Duplicates collapse.
-`--source-locales`, `--locales-file` and `--locales en-US,uk` override for one run.
+The object form of an entry is for when the code Google wants and the column name must differ - PGS calls
+indonesian `id`, which a translation service reads as an *identifier* column, so the csv says `id-ID`
+while the API still gets `id`. The alias applies whether or not the column came from the file.
+
+Order: `SourceLocales`, then what exists in `locales.json` order (all of it with `--all-locales`), then
+languages the file never mentions, sorted. Duplicates collapse. `--source-locales`, `--locales-file` and
+`--locales en-US,uk` override for one run; columns named in `--locales` are always included, empty or not.
 
 #### Importing
 

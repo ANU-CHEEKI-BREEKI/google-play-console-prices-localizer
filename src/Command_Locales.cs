@@ -81,7 +81,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             Console.WriteLine("description:");
             CommandLinesUtils.PrintDescription(Description);
             CommandLinesUtils.PrintDescription("Google keeps three independent language lists for one game - the store listing, the Play Games Services translations and the one-time product listings - and nothing keeps them in sync. They do not even agree on the codes: es-419 on the store page against es-ES in the achievements, hebrew as iw-IL.");
-            CommandLinesUtils.PrintDescription("The exports all write the same shape of csv, one row per key and one column per language, and all read the same 'SourceLocales' and locales json to decide the columns. The imports read that csv back.");
+            CommandLinesUtils.PrintDescription("The exports all write the same shape of csv, one row per key and one column per language, and all read the same 'SourceLocales' and locales json to order the columns. By default only languages that already exist are exported; --all-locales adds an empty column for every entry of the locales json. The imports read that csv back.");
 
             Console.WriteLine();
             Console.WriteLine("subcommands:");

@@ -46,12 +46,13 @@ public class Config
     public List<string> SourceLocales { get; set; } = [];
 
     /// <summary>
-    /// json file with every locale the exports produce a column for, a plain array of codes in the
-    /// order you want the columns.
-    /// It has to be maintained by hand: Play Games Services hides a language until something is
-    /// actually translated into it, and its api has no resource for the language list at all, so a
-    /// language added in the console and still empty cannot be discovered. A missing file is fine,
-    /// it just means only the locales already carrying a translation are exported
+    /// json file that orders the exported columns, a plain array of codes in the order you want them.
+    /// By default it only orders and aliases what already exists; with --all-locales every entry
+    /// becomes a column even when nothing is translated into it yet.
+    /// The file has to be maintained by hand because empty languages cannot be discovered: Play Games
+    /// Services hides a language until something is actually translated into it, and its api has no
+    /// resource for the language list at all. A missing file is fine, it just means the columns come
+    /// out sorted instead of in a chosen order
     /// </summary>
     public string LocalesFilePath { get; set; } = "./locales.json";
 

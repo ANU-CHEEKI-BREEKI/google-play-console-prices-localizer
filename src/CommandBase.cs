@@ -88,17 +88,23 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
         }
 
         /// <summary>
-        /// The columns an export produces, in order. Everything the tool can see gets one - the source
-        /// locales only decide what comes first, they never narrow anything down.
+        /// The columns an export produces, in order. By default only languages that actually exist -
+        /// the source locales plus <paramref name="found"/>, everything already translated - because
+        /// a column for a language the app does not have yet is only wanted when new languages are
+        /// being added, and that is what --all-locales is for.
         ///
-        /// Order: the source locales, in exactly the order they are configured, because a translation
-        /// service reads the leading columns as its context and the order decides which one is the
-        /// primary source. Then <paramref name="found"/>, everything already translated. Then the
-        /// locales json, or whatever --locales overrides it with for this one run.
+        /// Order: the source locales first, in exactly the order they are configured, because a
+        /// translation service reads the leading columns as its context and the order decides which
+        /// one is the primary source. Then the rest of what exists, in the order the locales json
+        /// names it. A language the json never mentions still gets its column, sorted, at the end.
         ///
-        /// The locales json is not a nicety. Play Games Services hides a language until something is
-        /// translated into it and exposes no language list at all, and a product listing exists only
-        /// where somebody wrote one, so an empty language is invisible unless it is named in the file.
+        /// --all-locales adds a column for every entry of the locales json even when nothing is
+        /// translated into it yet. That is how a language is added at all: Play Games Services hides
+        /// a language until something is translated into it, and a product listing exists only where
+        /// somebody wrote one, so an empty language is invisible unless the file names it.
+        ///
+        /// --locales names exact columns for one run and always gets them, empty or not - an
+        /// explicitly asked for column is never filtered away.
         /// </summary>
         protected async Task<List<LocaleColumn>> ResolveLocales(IEnumerable<string> found, bool verbose)
         {
@@ -106,7 +112,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 .Where(l => !string.IsNullOrWhiteSpace(l))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(l => l, StringComparer.Ordinal)
-                .Select(l => new LocaleColumn(l, l));
+                .Select(l => new LocaleColumn(l, l))
+                .ToList();
 
             // without a configured order the single default language leads
             var leading = (Config.SourceLocales is { Count: > 0 }
@@ -114,26 +121,41 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     : [Config.DefaultLanguageCode])
                 .Select(l => new LocaleColumn(l, l));
 
-            var configured = Config.Locales is { Count: > 0 }
+            var explicitList = Config.Locales is { Count: > 0 };
+            var configured = explicitList
                 ? Config.Locales.Select(l => new LocaleColumn(l, l)).ToList()
                 : await LoadLocalesFile(verbose);
 
+            var includeEmpty = explicitList || Args.HasFlag("--all-locales");
+
             var locales = new List<LocaleColumn>();
 
-            foreach (var locale in leading.Concat(translated).Concat(configured))
+            // the first mention decides the order, the locales json decides the column name:
+            // indonesian is 'id' to the api whether it was found translated or not, and the csv
+            // must still say 'id-ID' for it
+            void Add(LocaleColumn locale)
             {
                 if (string.IsNullOrWhiteSpace(locale.Locale))
-                    continue;
+                    return;
 
-                // the first mention decides the order, the locales json decides the column name:
-                // indonesian is 'id' to the api whether it was found translated or not, and the csv
-                // must still say 'id-ID' for it
-                if (!locales.Any(l => string.Equals(l.Locale, locale.Locale, StringComparison.OrdinalIgnoreCase)))
-                {
-                    var alias = configured.FirstOrDefault(c => string.Equals(c.Locale, locale.Locale, StringComparison.OrdinalIgnoreCase));
-                    locales.Add(alias ?? locale);
-                }
+                if (locales.Any(l => string.Equals(l.Locale, locale.Locale, StringComparison.OrdinalIgnoreCase)))
+                    return;
+
+                var alias = configured.FirstOrDefault(c => string.Equals(c.Locale, locale.Locale, StringComparison.OrdinalIgnoreCase));
+                locales.Add(alias ?? locale);
             }
+
+            foreach (var locale in leading)
+                Add(locale);
+
+            foreach (var locale in configured)
+            {
+                if (includeEmpty || translated.Any(t => string.Equals(t.Locale, locale.Locale, StringComparison.OrdinalIgnoreCase)))
+                    Add(locale);
+            }
+
+            foreach (var locale in translated)
+                Add(locale);
 
             return locales;
         }

@@ -92,11 +92,11 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             );
             CommandLinesUtils.PrintOption(
                 "--locales-file <path>",
-                "Specifies path to the json with every locale the exports produce a column for, a plain array of codes. If not specified, used path from global config json ('LocalesFilePath'), which defaults to './locales.json' next to it."
+                "Specifies path to the json that orders the exported columns, a plain array of codes; with --all-locales its entries become columns even when empty. If not specified, used path from global config json ('LocalesFilePath'), which defaults to './locales.json' next to it."
             );
             CommandLinesUtils.PrintOption(
                 "--locales <code[,code...]>",
-                "Locales to export columns for, for this run only. Overrides the whole locales json file."
+                "Locales to export columns for, for this run only, empty or not. Overrides the whole locales json file."
             );
             CommandLinesUtils.PrintOption(
                 "--games-project <id>",

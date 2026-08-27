@@ -177,7 +177,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("locales export iaps [--csv <path>] [--source-locales <code[,code...]>] [--locales-file <path>] [--locales <code[,code...]>] [--iap <id[,id...]>] [-v]");
+            Console.WriteLine("locales export iaps [--csv <path>] [--source-locales <code[,code...]>] [--locales-file <path>] [--locales <code[,code...]>] [--all-locales] [--iap <id[,id...]>] [-v]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -186,7 +186,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintDescription($"Columns: '{KeyHeader}', '{LocaleColumns.CommentsColumn}' (which product, which field, how long it may be), then one column per language named 'English (United States)(en-US)' - the locale code in the trailing parentheses is what the import reads. Every product contributes two rows, '<product_id>{TitleSuffix}' and '<product_id>{DescriptionSuffix}', because a translation service wants one string per row.");
             CommandLinesUtils.PrintDescription("Google auto translates the store page and nothing else, so a product listing stays in whatever language it was typed in - and that listing is what the Play purchase sheet shows at the moment of paying.");
             CommandLinesUtils.PrintDescription("Not to be confused with 'export-iaps', the top level command that writes the product definitions csv 'create-iaps' reads back: prices, one language, one row per product. This command is only about the text.");
-            CommandLinesUtils.PrintDescription("Every language the tool can see gets a column, plus every language named in the locales json. The source locales only decide what comes first, they never narrow anything down.");
+            CommandLinesUtils.PrintDescription("By default only languages something is already translated into get a column, in the order the locales json names them. The source locales lead and are always there, even empty. --all-locales adds a column for every entry of the locales json, for when new languages are being added.");
             CommandLinesUtils.PrintDescription("A title over 55 characters or a description over 200 is reported at the end, because Google rejects those and a translation is routinely longer than its english.");
             CommandLinesUtils.PrintDescription("An existing csv at the target path is overwritten.");
 
@@ -203,11 +203,15 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             );
             CommandLinesUtils.PrintOption(
                 "--locales-file <path>",
-                "Specifies path to the json with every locale to produce a column for. Default is the path from global config json ('LocalesFilePath'), './locales.json' next to it."
+                "Specifies path to the json that orders the columns and, with --all-locales, names the extra ones. Default is the path from global config json ('LocalesFilePath'), './locales.json' next to it."
             );
             CommandLinesUtils.PrintOption(
                 "--locales <code[,code...]>",
-                "Locales to export columns for, for this run only. Overrides the whole locales json file."
+                "Locales to export columns for, for this run only, empty or not. Overrides the whole locales json file."
+            );
+            CommandLinesUtils.PrintOption(
+                "--all-locales",
+                "Also produce a column for every locale in the locales json, even ones with nothing translated yet. This is how a new language is started: translate into the empty column and import."
             );
             CommandLinesUtils.PrintOption(
                 CommandLinesUtils.IapOptionName,
