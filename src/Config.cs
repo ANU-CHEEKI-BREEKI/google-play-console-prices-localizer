@@ -26,6 +26,12 @@ public class Config
     /// </summary>
     public string IapTranslationsFilePath { get; set; } = "./iap-translations.csv";
 
+    /// <summary>
+    /// csv with the release notes translations the 'locales export release-notes' command writes.
+    /// Like the other paths, must not be empty
+    /// </summary>
+    public string ReleaseNotesFilePath { get; set; } = "./release-notes.csv";
+
     /// <summary>language of the store listing the 'export-iaps' and 'create-iaps' commands read and write</summary>
     public string DefaultLanguageCode { get; set; } = "en-US";
 

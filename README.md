@@ -292,8 +292,10 @@ Your Play Console account needs at least the *"View app information (read-only)"
     locales                         # which languages exist where
     locales export achievements     # achievement text out to a csv
     locales export iaps             # product text out to a csv
+    locales export release-notes    # release notes out to a csv
     locales import achievements     # the translated csv back in
     locales import iaps
+    locales import release-notes    # the translated notes into the draft release
 
 Google auto translates your **store page** and nothing else. Achievements and product listings stay in
 whatever language you typed them in, in every country - and the product listing is what the Play purchase
@@ -416,6 +418,29 @@ and purchase options are not in the request at all.
 - *Half a product listing.* A listing needs both a title and a description, and Google caps them at 55 and
   200 characters. A language that would end up incomplete or too long is dropped with a warning rather
   than sent and rejected - a translation is routinely longer than the english it came from.
+
+#### Release notes
+
+    dotnet run -- locales export release-notes       # the newest release in production
+    # translate the csv
+    dotnet run -- locales import release-notes -n    # what would change, sent nowhere
+    dotnet run -- locales import release-notes       # into the draft release
+
+One row (`release.notes`), one column per language - the same table as the other exports, so the same
+translation pipeline covers it. The comment column names the release it came from and the 500 character
+per-language limit.
+
+Which release: `--track production|beta|...` picks the track, `--release draft|latest|live|<versionCode>`
+picks the release inside it. Export defaults to `latest` and is read only - the edit it opens to reach
+the track is thrown away. Import defaults to `draft`, the release nobody has yet.
+
+**A released version is never touched by accident.** A release players can already have (`inProgress`,
+`halted`, `completed`) is refused unless `--live` is passed explicitly. Writing it re-publishes the very
+same bundle with the new notes - safe, but always deliberate.
+
+The languages must exist in the store listing, Google rejects the rest. The import commits one edit with
+nothing else in it; on `-n`/`--dry-run`, on refusal and on every failure the edit is discarded. If Google
+answers that changes cannot be sent for review automatically, re-run with `--no-review`.
 
 #### Setup
 

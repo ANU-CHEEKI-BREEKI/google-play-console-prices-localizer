@@ -98,6 +98,7 @@ config.ProductDefinitionsFilePath = Path.Combine(configDirectory, config.Product
 config.AchievementTranslationsFilePath = Path.Combine(configDirectory, config.AchievementTranslationsFilePath);
 config.LocalesFilePath = Path.Combine(configDirectory, config.LocalesFilePath);
 config.IapTranslationsFilePath = Path.Combine(configDirectory, config.IapTranslationsFilePath);
+config.ReleaseNotesFilePath = Path.Combine(configDirectory, config.ReleaseNotesFilePath);
 config.VitalsOutputPath = Path.Combine(configDirectory, config.VitalsOutputPath);
 
 
@@ -114,6 +115,7 @@ config.ProductDefinitionsFilePath = args.TryGetOption("--products", config.Produ
 config.AchievementTranslationsFilePath = args.TryGetOption("--csv", config.AchievementTranslationsFilePath);
 config.LocalesFilePath = args.TryGetOption("--locales-file", config.LocalesFilePath);
 config.IapTranslationsFilePath = args.TryGetOption("--csv", config.IapTranslationsFilePath);
+config.ReleaseNotesFilePath = args.TryGetOption("--csv", config.ReleaseNotesFilePath);
 config.DefaultLanguageCode = args.TryGetOption("--language", config.DefaultLanguageCode);
 
 var sourceLocales = args.TryGetOption("--source-locales", "");

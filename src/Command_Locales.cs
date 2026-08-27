@@ -29,9 +29,11 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                 ("export", "achievements") => new Command_LocalesExportAchievements(),
                 ("export", "iaps") => new Command_LocalesExportIaps(),
+                ("export", "release-notes") => new Command_LocalesExportReleaseNotes(),
 
                 ("import", "achievements") => new Command_LocalesImportAchievements(),
                 ("import", "iaps") => new Command_LocalesImportIaps(),
+                ("import", "release-notes") => new Command_LocalesImportReleaseNotes(),
 
                 _ => new Unknown(name, target),
             };
@@ -69,8 +71,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             Console.WriteLine("locales [list]");
             Console.WriteLine("locales export achievements [options]");
             Console.WriteLine("locales export iaps [options]");
+            Console.WriteLine("locales export release-notes [options]");
             Console.WriteLine("locales import achievements [options]");
             Console.WriteLine("locales import iaps [options]");
+            Console.WriteLine("locales import release-notes [options]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -85,8 +89,10 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintOption("list", "Show which languages exist in the store listing, in Play Games Services and in the products, and which are missing from where. This is the default when no subcommand is given.");
             CommandLinesUtils.PrintOption("export achievements", "Write every achievement name and description into a translatable csv.");
             CommandLinesUtils.PrintOption("export iaps", "Write every One-time product title and description into a translatable csv.");
+            CommandLinesUtils.PrintOption("export release-notes", "Write the release notes of one track release into a translatable csv.");
             CommandLinesUtils.PrintOption("import achievements", "Write a translated achievements csv back into Play Games Services.");
             CommandLinesUtils.PrintOption("import iaps", "Write a translated products csv back into the One-time product listings. Prices are never part of the request.");
+            CommandLinesUtils.PrintOption("import release-notes", "Write a translated release notes csv back into one track release. The draft by default, a released version only with --live.");
 
             Console.WriteLine();
             Console.WriteLine("Run 'locales <subcommand> --help' for the options of one subcommand.");
@@ -100,6 +106,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintDescription("locales export iaps --locales en-US,uk     # two columns, ignore the locales json", 4);
             CommandLinesUtils.PrintDescription("locales import achievements -n             # what the csv would change, sent nowhere", 4);
             CommandLinesUtils.PrintDescription("locales import iaps                        # the translated titles go live", 4);
+            CommandLinesUtils.PrintDescription("locales export release-notes               # the newest release's notes out to a csv", 4);
+            CommandLinesUtils.PrintDescription("locales import release-notes               # the translated notes into the draft release", 4);
         }
 
         /// <summary>a subcommand that does not exist, kept as a CommandBase so the router stays uniform</summary>
