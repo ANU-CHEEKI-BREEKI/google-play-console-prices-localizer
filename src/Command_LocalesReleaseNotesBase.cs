@@ -8,7 +8,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
     /// through an edit - a draft change list the api opens, reads or writes, and either commits or
     /// throws away. An export only ever throws its edit away, an import commits exactly one.
     /// </summary>
-    public abstract class Command_LocalesReleaseNotesBase : CommandBase
+    public abstract class Command_LocalesReleaseNotesBase : Command_LocalesEditBase
     {
         /// <summary>
         /// the one key the csv carries. Same '&lt;id&gt;.&lt;field&gt;' shape as every other
@@ -110,28 +110,6 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 Console.WriteLine($"        {Describe(release)}");
 
             Console.WriteLine("pick one with --release draft|latest|live|<versionCode>");
-        }
-
-        /// <summary>
-        /// throws the draft edit away. An abandoned one would sit in the console as a pending change
-        /// </summary>
-        protected async Task DiscardEdit(AppEdit? edit, bool verbose)
-        {
-            if (edit is null)
-                return;
-
-            try
-            {
-                await Service!.Edits.Delete(Package, edit.Id).ExecuteAsync();
-            }
-            catch (Exception ex) when (verbose)
-            {
-                Console.WriteLine($"could not discard the edit {edit.Id}: {ex.Message}");
-            }
-            catch
-            {
-                // an already gone edit is exactly what was wanted
-            }
         }
     }
 }

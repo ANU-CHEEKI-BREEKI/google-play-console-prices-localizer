@@ -293,9 +293,13 @@ Your Play Console account needs at least the *"View app information (read-only)"
     locales export achievements     # achievement text out to a csv
     locales export iaps             # product text out to a csv
     locales export release-notes    # release notes out to a csv
+    locales export listing          # the store page texts out to a csv
+    locales export images           # store screenshots and graphics into per language folders
     locales import achievements     # the translated csv back in
     locales import iaps
     locales import release-notes    # the translated notes into the draft release
+    locales import listing          # the translated store page back up
+    locales import images           # the localized images back up
 
 Google auto translates your **store page** and nothing else. Achievements and product listings stay in
 whatever language you typed them in, in every country - and the product listing is what the Play purchase
@@ -447,6 +451,57 @@ same bundle with the new notes - safe, but always deliberate.
 The languages must exist in the store listing, Google rejects the rest. The import commits one edit with
 nothing else in it; on `-n`/`--dry-run`, on refusal and on every failure the edit is discarded. If Google
 answers that changes cannot be sent for review automatically, re-run with `--no-review`.
+
+#### The store page: `listing`
+
+    dotnet run -- locales export listing             # app name + descriptions out to a csv
+    # translate the csv
+    dotnet run -- locales import listing -n          # what would change, sent nowhere
+    dotnet run -- locales import listing             # committed as one edit
+
+Four rows - `listing.title`, `listing.short_description`, `listing.full_description`, `listing.video` -
+one column per language, the same table as the other exports. The comment column carries the limits:
+**30** characters for the app name, **80** for the short description, **4000** for the full one. A cell
+over its limit is reported by the export and never sent by the import.
+
+A store language **exists because its listing exists**, so translating into an empty `--all-locales`
+column and importing is what adds the language. A new language must bring all three texts at once; one
+that would arrive incomplete is dropped with a warning. The usual csv rules hold: empty cells never wipe
+anything, unchanged values are not sent, headers map back through `locales.json`.
+
+The import commits one edit with nothing else in it; on `-n`/`--dry-run` and on every failure the edit is
+discarded. Committing sends the change to Google review - that is how any store page change ships.
+`--no-review` works the same as everywhere else.
+
+#### Screenshots and graphics: `images`
+
+    dotnet run -- locales export images              # everything into ./store-images
+    # replace the files in the folders you localized
+    dotnet run -- locales import images -n           # what would be replaced, sent nowhere
+    dotnet run -- locales import images              # committed as one edit
+
+Layout: `store-images/<language>/<type>/01.png`, one folder per store language, one subfolder per image
+type in api spelling - `phoneScreenshots`, `sevenInchScreenshots`, `tenInchScreenshots`, `tvScreenshots`,
+`wearScreenshots`, `icon`, `featureGraphic`, `tvBanner`. The numbering is the order on the store page.
+Up to 8 screenshots per type, exactly one of everything else; png and jpeg only.
+
+The import **replaces whole sets**: a `<language>/<type>` folder with files replaces its online
+counterpart - delete all, upload in file order - because the store shows screenshots in upload order and
+there is no other way to reorder. What makes that safe to run over a full export:
+
+- a folder that does not exist locally is never touched
+- a folder that is still **byte for byte what the export wrote** is skipped - the `images.csv` manifest
+  written next to the folders records the hash of every downloaded file, so only folders you actually
+  changed are sent
+- everything rides one edit, committed at the end; on `-n` and on any failure the edit is discarded and
+  the deletions vanish with it, so players never see half an import
+
+Google serves the exported images re-encoded at full resolution (`=s0`): the pixels are what is online,
+the original bytes are not. To add images for a new language, import its `listing` first (that creates
+the language), then create the folders by hand - `--all-locales` has no meaning for folders. After an
+import, export again to refresh the folders and the manifest. `--keep` appends instead of replacing,
+`--types` and `--locales` narrow a run, `--images-dir` moves the whole tree
+(config: `StoreImagesDirPath`, `./store-images` next to `config.json`).
 
 #### Setup
 

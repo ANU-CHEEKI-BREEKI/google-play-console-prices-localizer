@@ -32,6 +32,18 @@ public class Config
     /// </summary>
     public string ReleaseNotesFilePath { get; set; } = "./release-notes.csv";
 
+    /// <summary>
+    /// csv with the store listing translations the 'locales export listing' command writes.
+    /// Like the other paths, must not be empty
+    /// </summary>
+    public string ListingTranslationsFilePath { get; set; } = "./listing-translations.csv";
+
+    /// <summary>
+    /// directory the 'locales export images' command writes the store images into, one folder per
+    /// language, and 'locales import images' reads back. Like the other paths, must not be empty
+    /// </summary>
+    public string StoreImagesDirPath { get; set; } = "./store-images";
+
     /// <summary>language of the store listing the 'export-iaps' and 'create-iaps' commands read and write</summary>
     public string DefaultLanguageCode { get; set; } = "en-US";
 

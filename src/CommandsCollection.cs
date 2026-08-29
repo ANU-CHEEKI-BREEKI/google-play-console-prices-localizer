@@ -88,7 +88,11 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             );
             CommandLinesUtils.PrintOption(
                 "--csv <path>",
-                "Csv the 'locales export' subcommands write. Defaults come from global config json: 'AchievementTranslationsFilePath' ('./achievement-translations.csv'), 'IapTranslationsFilePath' ('./iap-translations.csv') and 'ReleaseNotesFilePath' ('./release-notes.csv')."
+                "Csv the 'locales export' subcommands write. Defaults come from global config json: 'AchievementTranslationsFilePath' ('./achievement-translations.csv'), 'IapTranslationsFilePath' ('./iap-translations.csv'), 'ReleaseNotesFilePath' ('./release-notes.csv') and 'ListingTranslationsFilePath' ('./listing-translations.csv')."
+            );
+            CommandLinesUtils.PrintOption(
+                "--images-dir <path>",
+                "Directory the 'locales export images' and 'locales import images' subcommands use, one folder per language. If not specified, used path from global config json ('StoreImagesDirPath'), which defaults to './store-images' next to it."
             );
             CommandLinesUtils.PrintOption(
                 "--locales-file <path>",
