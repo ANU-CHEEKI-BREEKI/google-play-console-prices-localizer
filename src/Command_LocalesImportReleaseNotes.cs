@@ -110,15 +110,12 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
                     await Service.Edits.Tracks.Update(track, Package, edit.Id, track.TrackValue ?? TrackName).ExecuteAsync();
 
-                    var commit = Service.Edits.Commit(Package, edit.Id);
-                    if (Args.HasFlag("--no-review"))
-                        commit.ChangesNotSentForReview = true;
-
-                    await commit.ExecuteAsync();
+                    await CommitEdit(edit.Id);
                     committed = true;
 
                     Console.WriteLine();
                     Console.WriteLine($"updated the notes of '{release.Name}' in {edits} language(s). Nothing else was part of the edit.");
+                    PrintCommitted();
                 }
                 catch (Google.GoogleApiException ex)
                 {
@@ -126,8 +123,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     Console.WriteLine("[ERROR] Google rejected the edit, nothing was published:");
                     Console.WriteLine($"        {ex.Message.Trim()}");
 
-                    if (ex.Message.Contains("changesNotSentForReview", StringComparison.OrdinalIgnoreCase))
-                        Console.WriteLine("        Google asks for the opposite setting of --no-review here: add or drop that flag and re-run.");
+                    PrintCommitHint(ex);
                 }
                 finally
                 {
@@ -192,7 +188,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("locales import release-notes [--track <name>] [--release draft|latest|live|<versionCode>] [--live] [--no-review] [--csv <path>] [--locales-file <path>] [-n|--dry-run] [-v]");
+            Console.WriteLine("locales import release-notes [--track <name>] [--release draft|latest|live|<versionCode>] [--live] [--review] [--csv <path>] [--locales-file <path>] [-n|--dry-run] [-v]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -220,8 +216,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "Allow writing into a release players can already have. Without it such a release is refused."
             );
             CommandLinesUtils.PrintOption(
-                "--no-review",
-                "Commit the edit with changesNotSentForReview, for apps where Google demands changes be sent for review manually. Only add it when Google's own error asks for it."
+                "--review",
+                "Send the changes straight to Google review instead of leaving them as a Play Console draft. After approval they go live on their own."
             );
             CommandLinesUtils.PrintOption(
                 "--csv <path>",

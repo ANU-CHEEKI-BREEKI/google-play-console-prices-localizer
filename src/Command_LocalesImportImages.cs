@@ -108,15 +108,12 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     Console.WriteLine();
                     Console.WriteLine("   -> committing the edit...");
 
-                    var commit = Service.Edits.Commit(Package, edit.Id);
-                    if (Args.HasFlag("--no-review"))
-                        commit.ChangesNotSentForReview = true;
-
-                    await commit.ExecuteAsync();
+                    await CommitEdit(edit.Id);
                     committed = true;
 
                     Console.WriteLine();
                     Console.WriteLine($"uploaded {uploaded} image(s) in {changed.Count} set(s), replaced {deleted}. Nothing else was part of the edit.");
+                    PrintCommitted();
                     Console.WriteLine("run 'locales export images' again to refresh the folders and the manifest.");
                 }
                 catch (Google.GoogleApiException ex)
@@ -125,8 +122,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     Console.WriteLine("[ERROR] Google rejected the edit, nothing was published:");
                     Console.WriteLine($"        {ex.Message.Trim()}");
 
-                    if (ex.Message.Contains("changesNotSentForReview", StringComparison.OrdinalIgnoreCase))
-                        Console.WriteLine("        Google asks for the opposite setting of --no-review here: add or drop that flag and re-run.");
+                    PrintCommitHint(ex);
                 }
                 finally
                 {
@@ -368,7 +364,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("locales import images [--images-dir <path>] [--types <type[,type...]>] [--locales <code[,code...]>] [--keep] [--no-review] [-n|--dry-run] [-v]");
+            Console.WriteLine("locales import images [--images-dir <path>] [--types <type[,type...]>] [--locales <code[,code...]>] [--keep] [--review] [-n|--dry-run] [-v]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -377,7 +373,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintDescription("Reads the layout 'locales export images' writes: '<dir>/<language>/<type>/<name>.png', files in name order - keep the numbering to keep the order on the store. png and jpeg only.");
             CommandLinesUtils.PrintDescription($"A set that has local files replaces its online counterpart completely: delete all, upload in order. A set with no local folder is never touched, and a set that is still byte for byte what the export wrote (the '{ManifestFileName}' knows) is skipped - so only what was actually localized is sent, and re-running an unchanged folder does nothing.");
             CommandLinesUtils.PrintDescription("A folder for a language the store listing does not have is skipped with a warning - the language is created by 'locales import listing', text first, images second.");
-            CommandLinesUtils.PrintDescription("Everything goes as one edit, committed at the end: on -n/--dry-run and on any failure the edit is discarded, and the deletions vanish with it - players never see half an import. Committing sends the changes to Google review, which is how any store page change ships.");
+            CommandLinesUtils.PrintDescription("Everything goes as one edit, committed at the end: on -n/--dry-run and on any failure the edit is discarded, and the deletions vanish with it - players never see half an import. The commit is a draft by default - the changes wait in the Play Console (Publishing overview) until a human sends them for review. Only --review sends them right away.");
             CommandLinesUtils.PrintDescription($"Google's caps are checked before sending: at most 8 screenshots per type, one icon, one feature graphic, one tv banner. Wrong dimensions Google reports itself, per image, and the whole edit is then discarded here.");
 
             Console.WriteLine();
@@ -400,8 +396,8 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                 "Add the local images after the existing ones instead of replacing them. Nothing is deleted."
             );
             CommandLinesUtils.PrintOption(
-                "--no-review",
-                "Commit the edit with changesNotSentForReview, for apps where Google demands changes be sent for review manually. Only add it when Google's own error asks for it."
+                "--review",
+                "Send the changes straight to Google review instead of leaving them as a Play Console draft. After approval they go live on their own."
             );
             CommandLinesUtils.PrintOption(
                 "-n|--dry-run",

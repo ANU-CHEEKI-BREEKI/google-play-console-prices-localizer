@@ -110,15 +110,12 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     Console.WriteLine();
                     Console.WriteLine("   -> committing the edit...");
 
-                    var commit = Service.Edits.Commit(Package, edit.Id);
-                    if (Args.HasFlag("--no-review"))
-                        commit.ChangesNotSentForReview = true;
-
-                    await commit.ExecuteAsync();
+                    await CommitEdit(edit.Id);
                     committed = true;
 
                     Console.WriteLine();
                     Console.WriteLine($"updated the store listing in {changed.Count - failed.Count} language(s). Nothing else was part of the edit.");
+                    PrintCommitted();
 
                     if (failed.Count > 0)
                         Console.WriteLine($"{failed.Count} language(s) were NOT imported: {string.Join(", ", failed)}");
@@ -129,8 +126,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
                     Console.WriteLine("[ERROR] Google rejected the edit, nothing was published:");
                     Console.WriteLine($"        {ex.Message.Trim()}");
 
-                    if (ex.Message.Contains("changesNotSentForReview", StringComparison.OrdinalIgnoreCase))
-                        Console.WriteLine("        Google asks for the opposite setting of --no-review here: add or drop that flag and re-run.");
+                    PrintCommitHint(ex);
                 }
                 finally
                 {
@@ -236,7 +232,7 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         public override void PrintHelp()
         {
-            Console.WriteLine("locales import listing [--no-review] [--csv <path>] [--locales-file <path>] [-n|--dry-run] [-v]");
+            Console.WriteLine("locales import listing [--review] [--csv <path>] [--locales-file <path>] [-n|--dry-run] [-v]");
             Console.WriteLine();
             Console.WriteLine();
 
@@ -246,14 +242,14 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
             CommandLinesUtils.PrintDescription("An empty cell means 'not translated yet' and is left alone - it never wipes text that is already there. A value identical to what Google already has is not sent, so re-running an unchanged csv does nothing.");
             CommandLinesUtils.PrintDescription("Column headers are mapped back through the locales json, so a column the export wrote as 'id-ID' still reaches the api as 'id'.");
             CommandLinesUtils.PrintDescription($"A language the store does not have yet is created by this very write, so it must bring all three texts at once - one that would arrive incomplete is dropped with a warning. Same for an app name over {TitleLimit} characters, a short description over {ShortLimit} or a full one over {FullLimit}.");
-            CommandLinesUtils.PrintDescription("Everything goes as one edit, committed at the end: on -n/--dry-run and on every failure the edit is discarded and nothing reaches players. Committing sends the changes to Google review, which is how any store page change ships.");
+            CommandLinesUtils.PrintDescription("Everything goes as one edit, committed at the end: on -n/--dry-run and on every failure the edit is discarded and nothing reaches players. The commit is a draft by default - the changes wait in the Play Console (Publishing overview) until a human sends them for review. Only --review sends them right away.");
 
             Console.WriteLine();
             Console.WriteLine("options:");
 
             CommandLinesUtils.PrintOption(
-                "--no-review",
-                "Commit the edit with changesNotSentForReview, for apps where Google demands changes be sent for review manually. Only add it when Google's own error asks for it."
+                "--review",
+                "Send the changes straight to Google review instead of leaving them as a Play Console draft. After approval they go live on their own."
             );
             CommandLinesUtils.PrintOption(
                 "--csv <path>",

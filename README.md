@@ -449,8 +449,8 @@ the track is thrown away. Import defaults to `draft`, the release nobody has yet
 same bundle with the new notes - safe, but always deliberate.
 
 The languages must exist in the store listing, Google rejects the rest. The import commits one edit with
-nothing else in it; on `-n`/`--dry-run`, on refusal and on every failure the edit is discarded. If Google
-answers that changes cannot be sent for review automatically, re-run with `--no-review`.
+nothing else in it; on `-n`/`--dry-run`, on refusal and on every failure the edit is discarded. Committed
+as a **draft** by default, like every import here - see the listing section below.
 
 #### The store page: `listing`
 
@@ -470,8 +470,14 @@ that would arrive incomplete is dropped with a warning. The usual csv rules hold
 anything, unchanged values are not sent, headers map back through `locales.json`.
 
 The import commits one edit with nothing else in it; on `-n`/`--dry-run` and on every failure the edit is
-discarded. Committing sends the change to Google review - that is how any store page change ships.
-`--no-review` works the same as everywhere else.
+discarded.
+
+**A commit is a draft by default.** The changes land in the Play Console under **Publishing overview** as
+"changes not yet sent for review" and wait for a human to press *Send for review* - nothing publishes on
+its own. `--review` is the old behavior: straight into Google review, live after approval. If Google
+refuses to hold a particular change as a draft, the import stops with Google's own error and the flag to
+re-run with - it never silently publishes what was meant to wait. The same default applies to
+`import images` and `import release-notes`.
 
 #### Screenshots and graphics: `images`
 
@@ -495,6 +501,7 @@ there is no other way to reorder. What makes that safe to run over a full export
   changed are sent
 - everything rides one edit, committed at the end; on `-n` and on any failure the edit is discarded and
   the deletions vanish with it, so players never see half an import
+- the commit is a **draft** by default, waiting in Publishing overview; `--review` sends it right away
 
 Google serves the exported images re-encoded at full resolution (`=s0`): the pixels are what is online,
 the original bytes are not. To add images for a new language, import its `listing` first (that creates
