@@ -20,6 +20,9 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
     {
         static readonly string[] ImageExtensions = [".png", ".jpg", ".jpeg"];
 
+        /// <summary>sets run in parallel; within a set the files stay sequential to keep the store order</summary>
+        const int MaxParallel = 6;
+
         /// <summary>all local files of one language + type, in the order they should end up on the store</summary>
         class Group
         {
@@ -221,17 +224,29 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         async Task ReadRemote(List<Group> groups, string editId)
         {
-            foreach (var group in groups)
+            using var throttle = new SemaphoreSlim(MaxParallel);
+
+            var tasks = groups.Select(async group =>
             {
-                var response = await Service!.Edits.Images
-                    .List(Package, editId, group.Language, TypeEnum<EditsResource.ImagesResource.ListRequest.ImageTypeEnum>(group.Type))
-                    .ExecuteAsync();
+                await throttle.WaitAsync();
+                try
+                {
+                    var response = await Service!.Edits.Images
+                        .List(Package, editId, group.Language, TypeEnum<EditsResource.ImagesResource.ListRequest.ImageTypeEnum>(group.Type))
+                        .ExecuteAsync();
 
-                group.Remote = response.Images ?? [];
+                    group.Remote = response.Images ?? [];
 
-                foreach (var file in group.Files)
-                    group.LocalShas.Add(Sha256OfFile(file));
-            }
+                    foreach (var file in group.Files)
+                        group.LocalShas.Add(Sha256OfFile(file));
+                }
+                finally
+                {
+                    throttle.Release();
+                }
+            });
+
+            await Task.WhenAll(tasks);
         }
 
         /// <summary>
@@ -301,58 +316,71 @@ namespace ANU.APIs.GoogleDeveloperAPI.IAPManaging
 
         async Task<(int uploaded, int deleted)> Apply(List<Group> changed, string editId, bool keep, bool verbose)
         {
+            using var throttle = new SemaphoreSlim(MaxParallel);
+
             var uploaded = 0;
             var deleted = 0;
 
-            foreach (var group in changed)
+            var tasks = changed.Select(async group =>
             {
                 if (keep && group.Remote.Count + group.Files.Count > MaxCount(group.Type))
                 {
                     Console.WriteLine($"Warning: {group.Language}/{group.Type} would hold {group.Remote.Count + group.Files.Count} image(s) with --keep, Google takes at most {MaxCount(group.Type)}. Skipped.");
-                    continue;
+                    return;
                 }
 
-                // deleting first keeps the order clean: the uploads then are the whole set, in file
-                // order. Until the commit this only lives in the edit, players still see the old set
-                if (!keep && group.Remote.Count > 0)
+                await throttle.WaitAsync();
+                try
                 {
-                    await Service!.Edits.Images
-                        .Deleteall(Package, editId, group.Language, TypeEnum<EditsResource.ImagesResource.DeleteallRequest.ImageTypeEnum>(group.Type))
-                        .ExecuteAsync();
+                    // deleting first keeps the order clean: the uploads then are the whole set, in file
+                    // order. Until the commit this only lives in the edit, players still see the old set
+                    if (!keep && group.Remote.Count > 0)
+                    {
+                        await Service!.Edits.Images
+                            .Deleteall(Package, editId, group.Language, TypeEnum<EditsResource.ImagesResource.DeleteallRequest.ImageTypeEnum>(group.Type))
+                            .ExecuteAsync();
 
-                    deleted += group.Remote.Count;
+                        Interlocked.Add(ref deleted, group.Remote.Count);
+                    }
+
+                    // sets run in parallel, but within a set the files go one by one on purpose -
+                    // the store shows a set in upload order
+                    foreach (var file in group.Files)
+                    {
+                        var contentType = ContentTypeOf(file)
+                            ?? throw new InvalidOperationException($"'{file}' is not a png or jpeg.");
+
+                        using var stream = File.OpenRead(file);
+
+                        var upload = Service!.Edits.Images.Upload(
+                            Package,
+                            editId,
+                            group.Language,
+                            TypeEnum<EditsResource.ImagesResource.UploadMediaUpload.ImageTypeEnum>(group.Type),
+                            stream,
+                            contentType
+                        );
+
+                        // a media upload reports its failure instead of throwing it
+                        var progress = await upload.UploadAsync();
+                        if (progress.Exception is not null)
+                            throw new InvalidOperationException($"failed to upload {group.Language}/{group.Type}/{Path.GetFileName(file)}: {progress.Exception.Message}", progress.Exception);
+
+                        Interlocked.Increment(ref uploaded);
+
+                        if (verbose)
+                            Console.WriteLine($"   {group.Language,-10} {group.Type,-22} {Path.GetFileName(file)} uploaded");
+                    }
+
+                    Console.WriteLine($"   -> {group.Language,-10} {group.Type,-22} {group.Files.Count} uploaded");
                 }
-
-                // sequential on purpose, the store shows the set in upload order
-                foreach (var file in group.Files)
+                finally
                 {
-                    var contentType = ContentTypeOf(file)
-                        ?? throw new InvalidOperationException($"'{file}' is not a png or jpeg.");
-
-                    using var stream = File.OpenRead(file);
-
-                    var upload = Service!.Edits.Images.Upload(
-                        Package,
-                        editId,
-                        group.Language,
-                        TypeEnum<EditsResource.ImagesResource.UploadMediaUpload.ImageTypeEnum>(group.Type),
-                        stream,
-                        contentType
-                    );
-
-                    // a media upload reports its failure instead of throwing it
-                    var progress = await upload.UploadAsync();
-                    if (progress.Exception is not null)
-                        throw new InvalidOperationException($"failed to upload {group.Language}/{group.Type}/{Path.GetFileName(file)}: {progress.Exception.Message}", progress.Exception);
-
-                    uploaded++;
-
-                    if (verbose)
-                        Console.WriteLine($"   {group.Language,-10} {group.Type,-22} {Path.GetFileName(file)} uploaded");
+                    throttle.Release();
                 }
+            });
 
-                Console.WriteLine($"   -> {group.Language,-10} {group.Type,-22} {group.Files.Count} uploaded");
-            }
+            await Task.WhenAll(tasks);
 
             return (uploaded, deleted);
         }
